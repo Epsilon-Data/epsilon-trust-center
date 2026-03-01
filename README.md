@@ -32,7 +32,7 @@ The Trust Center performs verification both **server-side** (pre-computed) and *
 | Routing | Wouter |
 | Data Fetching | TanStack React Query |
 | Trust Chain Graph | @xyflow/react (React Flow) |
-| Client-side Crypto | @aspect-data/nitro-verify |
+| Client-side Crypto | @epsilon-data/nitro-verify |
 | Backend | Express 5 |
 | Database | PostgreSQL (read-only) |
 | Security | Helmet, express-rate-limit |
@@ -41,7 +41,7 @@ The Trust Center performs verification both **server-side** (pre-computed) and *
 
 - Node.js 20+
 - PostgreSQL database with `job_requests` table (read-only access)
-- [@aspect-data/nitro-verify](https://github.com/Epsilon-Data/nitro-verify) package (client-side attestation verification)
+- [@epsilon-data/nitro-verify](https://github.com/Epsilon-Data/nitro-verify) package (client-side attestation verification)
 
 ## Setup
 
@@ -133,7 +133,7 @@ All endpoints are read-only. No authentication required.
 
 ## Verification Steps
 
-The client-side verifier (`@aspect-data/nitro-verify`) performs these checks in your browser:
+The client-side verifier (`@epsilon-data/nitro-verify`) performs these checks in your browser:
 
 1. **Parse** — Decode the CBOR/COSE_Sign1 attestation document
 2. **Certificate Chain** — Verify the chain from AWS root to enclave certificate
