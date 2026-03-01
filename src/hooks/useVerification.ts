@@ -3,7 +3,7 @@ import {
   verifyAttestation,
   type VerificationResult,
   type VerificationStep,
-} from "@aspect-data/nitro-verify";
+} from "@epsilon-data/nitro-verify";
 import type { JobVerification } from "@/lib/api";
 
 const INITIAL_RESULT: VerificationResult = {

@@ -6,7 +6,7 @@ import {
   Hash,
   FileCode,
 } from "lucide-react";
-import type { VerificationResult } from "@aspect-data/nitro-verify";
+import type { VerificationResult } from "@epsilon-data/nitro-verify";
 import type { SectionStatus } from "@/components/shared/StatusIcon";
 import type { SidebarSection } from "@/lib/types";
 

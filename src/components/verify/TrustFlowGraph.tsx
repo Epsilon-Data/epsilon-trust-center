@@ -10,7 +10,7 @@ import {
   MarkerType,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import type { VerificationResult } from "@aspect-data/nitro-verify";
+import type { VerificationResult } from "@epsilon-data/nitro-verify";
 import type { SidebarSection } from "@/lib/types";
 import { TrustNode } from "./flow/TrustNode";
 

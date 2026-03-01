@@ -6,7 +6,7 @@ import { StatusBadge } from "@/components/shared/StatusBadge";
 import { FieldRow } from "@/components/shared/FieldRow";
 import { Download, ExternalLink, CheckCircle2, XCircle, Server, Globe, Monitor } from "lucide-react";
 import type { JobVerification } from "@/lib/api";
-import type { VerificationResult } from "@aspect-data/nitro-verify";
+import type { VerificationResult } from "@epsilon-data/nitro-verify";
 
 const PCR_REGISTRY_URL = "https://github.com/Epsilon-Data/epsilon-enclave/tree/main/published";
 
