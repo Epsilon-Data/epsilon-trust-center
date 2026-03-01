@@ -1,0 +1,26 @@
+services:
+  trust-center:
+    image: ghcr.io/epsilon-data/epsilon-trust-center:latest
+    container_name: trust-center
+    ports:
+      - "3001:3001"
+    environment:
+      # Database connection (read-only access to coordinator PostgreSQL)
+      - DATABASE_URL=${DATABASE_URL}
+      - DATABASE_SSL=${DATABASE_SSL:-true}
+      - DATABASE_POOL_MAX=${DATABASE_POOL_MAX:-5}
+      # Server
+      - PORT=${PORT:-3001}
+      # Rate limiting
+      - RATE_LIMIT_MAX=${RATE_LIMIT_MAX:-100}
+      # GitHub config for PCR registry
+      - GITHUB_OWNER=epsilon-data
+      - GITHUB_REPO=epsilon-enclave
+      - GITHUB_TOKEN=${GITHUB_TOKEN}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3001/api/stats"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
