@@ -372,7 +372,7 @@ app.get("/api/pcr-registry", async (_req, res) => {
 // Serve static frontend in production (dist/public/ from vite build)
 const clientDist = path.resolve(__dirname, "public");
 app.use(express.static(clientDist));
-app.get("*", (_req, res) => {
+app.get("/{*splat}", (_req, res) => {
   res.sendFile(path.join(clientDist, "index.html"));
 });
 
