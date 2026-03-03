@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
-import { ArrowLeft, Loader2, Monitor, Server, ShieldCheck, ShieldAlert } from "lucide-react";
+import { ArrowLeft, Loader2, Monitor, Server, ShieldCheck, ShieldAlert, CheckCircle2, XCircle, Eye, EyeOff, Lock, Cpu, FileCheck, Building2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { TrustFlowGraph } from "@/components/verify/TrustFlowGraph";
@@ -27,6 +27,7 @@ interface VerifyPageProps {
 
 export default function VerifyPage({ params }: VerifyPageProps) {
   const jobId = params.jobId;
+  const [viewMode, setViewMode] = useState<"simple" | "advanced">("simple");
   const [expandedSections, setExpandedSections] = useState<Set<SidebarSection>>(
     new Set(["hardware"])
   );
@@ -128,6 +129,20 @@ export default function VerifyPage({ params }: VerifyPageProps) {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {hasAttestation && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setViewMode(viewMode === "simple" ? "advanced" : "simple")}
+              className="gap-1.5"
+            >
+              {viewMode === "simple" ? (
+                <><Eye className="h-3.5 w-3.5" /> Advanced</>
+              ) : (
+                <><EyeOff className="h-3.5 w-3.5" /> Simple</>
+              )}
+            </Button>
+          )}
           {hasAttestation ? (
             <Badge variant="success" className="text-sm px-3 py-1">ATTESTED</Badge>
           ) : (
@@ -149,56 +164,60 @@ export default function VerifyPage({ params }: VerifyPageProps) {
         </>
       )}
 
-      {/* Linear layout */}
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
-        {/* Trust Flow Graph — always visible */}
-        {hasAttestation && (
-          <div className="border rounded-lg bg-card overflow-hidden">
-            <div className="h-[300px] sm:h-[400px] w-full">
-              <TrustFlowGraph
-                selectedSection={activeGraphSection}
-                onSelectSection={handleGraphNodeClick}
-                verificationResult={verificationResult}
-              />
+      {/* Content */}
+      {viewMode === "simple" && hasAttestation ? (
+        <SimpleVerificationView job={job} verificationResult={verificationResult} />
+      ) : (
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+          {/* Trust Flow Graph — always visible */}
+          {hasAttestation && (
+            <div className="border rounded-lg bg-card overflow-hidden">
+              <div className="h-[300px] sm:h-[400px] w-full">
+                <TrustFlowGraph
+                  selectedSection={activeGraphSection}
+                  onSelectSection={handleGraphNodeClick}
+                  verificationResult={verificationResult}
+                />
+              </div>
             </div>
+          )}
+
+          {/* Expandable verification cards */}
+          <div className="space-y-3">
+            {sections.map((section) => {
+              const status = hasAttestation
+                ? getStepStatus(section.id, verificationResult)
+                : "na";
+              const stepId = sectionStepMap[section.id];
+              const step = verificationResult.steps.find((s) => s.id === stepId);
+
+              return (
+                <VerificationStepCard
+                  key={section.id}
+                  id={section.id}
+                  label={section.label}
+                  description={section.description}
+                  icon={section.icon}
+                  status={status}
+                  timing={step?.durationMs}
+                  expanded={expandedSections.has(section.id)}
+                  highlighted={highlightedSection === section.id}
+                  onToggle={() => toggleSection(section.id)}
+                >
+                  {renderDetailContent(section.id)}
+                </VerificationStepCard>
+              );
+            })}
           </div>
-        )}
 
-        {/* Expandable verification cards */}
-        <div className="space-y-3">
-          {sections.map((section) => {
-            const status = hasAttestation
-              ? getStepStatus(section.id, verificationResult)
-              : "na";
-            const stepId = sectionStepMap[section.id];
-            const step = verificationResult.steps.find((s) => s.id === stepId);
-
-            return (
-              <VerificationStepCard
-                key={section.id}
-                id={section.id}
-                label={section.label}
-                description={section.description}
-                icon={section.icon}
-                status={status}
-                timing={step?.durationMs}
-                expanded={expandedSections.has(section.id)}
-                highlighted={highlightedSection === section.id}
-                onToggle={() => toggleSection(section.id)}
-              >
-                {renderDetailContent(section.id)}
-              </VerificationStepCard>
-            );
-          })}
+          {/* CLI Verification Commands */}
+          <CLIVerificationCommands
+            jobId={job.job_id}
+            attestationB64={job.attestation?.attestation?.attestation_document}
+            outputHash={job.attestation?.proof?.output_hash}
+          />
         </div>
-
-        {/* CLI Verification Commands */}
-        <CLIVerificationCommands
-          jobId={job.job_id}
-          attestationB64={job.attestation?.attestation?.attestation_document}
-          outputHash={job.attestation?.proof?.output_hash}
-        />
-      </div>
+      )}
     </div>
   );
 }
@@ -235,6 +254,175 @@ function ServerVerificationBanner({
         <Server className="h-3 w-3" />
         Pre-computed
       </Badge>
+    </div>
+  );
+}
+
+function SimpleVerificationView({
+  job,
+  verificationResult,
+}: {
+  job: JobVerification;
+  verificationResult: ReturnType<typeof useVerification>["result"];
+}) {
+  const allPassed =
+    job.server_verification?.valid && verificationResult.valid;
+  const outputHash = job.attestation?.proof?.output_hash;
+  const metadata = job.attestation?.proof as Record<string, unknown> | undefined;
+  const completedAt = job.completed_at
+    ? new Date(job.completed_at).toLocaleString()
+    : "N/A";
+
+  const checks = [
+    {
+      icon: Cpu,
+      title: "Ran on secure hardware",
+      description:
+        "Your analysis ran inside an AWS Nitro Enclave — an isolated, tamper-proof environment. Not even AWS administrators can access data inside it.",
+      passed: getStepStatus("hardware", verificationResult) === "verified",
+    },
+    {
+      icon: Lock,
+      title: "Code integrity verified",
+      description:
+        "The exact code that ran matches the published open-source version. No modifications were made before or during execution.",
+      passed: getStepStatus("enclave-image", verificationResult) === "verified",
+    },
+    {
+      icon: Building2,
+      title: "Certificate chain trusted",
+      description:
+        "The security certificate traces back to Amazon's root authority, confirming this is genuine AWS hardware — not a simulation.",
+      passed: getStepStatus("certificate-chain", verificationResult) === "verified",
+    },
+    {
+      icon: FileCheck,
+      title: "Output has not been tampered with",
+      description:
+        "The results you received match exactly what the secure enclave produced. The output hash was locked inside the hardware attestation before delivery.",
+      passed: getStepStatus("output-integrity", verificationResult) === "verified",
+    },
+  ];
+
+  return (
+    <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+      {/* Big status */}
+      <div className="text-center space-y-4">
+        {allPassed ? (
+          <>
+            <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-green-100">
+              <ShieldCheck className="h-10 w-10 text-green-600" />
+            </div>
+            <h2 className="text-2xl font-bold text-green-800">
+              Verified — You can trust this result
+            </h2>
+            <p className="text-muted-foreground max-w-lg mx-auto">
+              This analysis ran inside a secure, isolated hardware environment.
+              The results were cryptographically sealed before leaving the enclave.
+              Nobody — not even Epsilon — could see or modify the data.
+            </p>
+          </>
+        ) : (
+          <>
+            <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-red-100">
+              <ShieldAlert className="h-10 w-10 text-red-600" />
+            </div>
+            <h2 className="text-2xl font-bold text-red-800">
+              Verification failed
+            </h2>
+            <p className="text-muted-foreground max-w-lg mx-auto">
+              One or more security checks did not pass. Switch to Advanced view for details.
+            </p>
+          </>
+        )}
+      </div>
+
+      {/* Simple checklist */}
+      <div className="space-y-4">
+        {checks.map((check, i) => (
+          <div
+            key={i}
+            className={`border rounded-lg p-5 flex items-start gap-4 ${
+              check.passed
+                ? "bg-green-50/50 border-green-200"
+                : "bg-red-50/50 border-red-200"
+            }`}
+          >
+            <div
+              className={`mt-0.5 flex-shrink-0 rounded-full p-2 ${
+                check.passed ? "bg-green-100" : "bg-red-100"
+              }`}
+            >
+              <check.icon
+                className={`h-5 w-5 ${
+                  check.passed ? "text-green-600" : "text-red-600"
+                }`}
+              />
+            </div>
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <h3 className="font-semibold">{check.title}</h3>
+                {check.passed ? (
+                  <CheckCircle2 className="h-4 w-4 text-green-600" />
+                ) : (
+                  <XCircle className="h-4 w-4 text-red-600" />
+                )}
+              </div>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                {check.description}
+              </p>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* What this means */}
+      <div className="border rounded-lg p-6 bg-blue-50/50 border-blue-200 space-y-3">
+        <h3 className="font-semibold text-blue-900">What does this mean?</h3>
+        <ul className="space-y-2 text-sm text-blue-800">
+          <li className="flex items-start gap-2">
+            <CheckCircle2 className="h-4 w-4 mt-0.5 flex-shrink-0 text-blue-600" />
+            <span>
+              <strong>Your data stayed private</strong> — the raw data was encrypted and only accessible inside the secure enclave. Epsilon never saw it.
+            </span>
+          </li>
+          <li className="flex items-start gap-2">
+            <CheckCircle2 className="h-4 w-4 mt-0.5 flex-shrink-0 text-blue-600" />
+            <span>
+              <strong>The results are authentic</strong> — the output is cryptographically linked to the hardware that produced it. Tampering is mathematically impossible.
+            </span>
+          </li>
+          <li className="flex items-start gap-2">
+            <CheckCircle2 className="h-4 w-4 mt-0.5 flex-shrink-0 text-blue-600" />
+            <span>
+              <strong>Anyone can verify independently</strong> — all proofs are based on open standards (AWS Nitro Attestation) and can be checked without trusting Epsilon.
+            </span>
+          </li>
+        </ul>
+      </div>
+
+      {/* Job details */}
+      <div className="border rounded-lg p-5 space-y-3 bg-card">
+        <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">
+          Execution Details
+        </h3>
+        <div className="grid grid-cols-2 gap-3 text-sm">
+          <div>
+            <span className="text-muted-foreground">Job ID</span>
+            <p className="font-mono font-medium">{job.job_id}</p>
+          </div>
+          <div>
+            <span className="text-muted-foreground">Completed</span>
+            <p className="font-medium">{completedAt}</p>
+          </div>
+          {outputHash && (
+            <div className="col-span-2">
+              <span className="text-muted-foreground">Output Fingerprint</span>
+              <p className="font-mono text-xs break-all">{outputHash}</p>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
