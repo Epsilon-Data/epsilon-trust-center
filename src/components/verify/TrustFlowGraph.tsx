@@ -7,7 +7,6 @@ import {
   type Edge,
   type NodeTypes,
   Position,
-  MarkerType,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import type { VerificationResult } from "@epsilon-data/nitro-verify";
@@ -38,7 +37,6 @@ const sectionMapping: Record<string, SidebarSection> = {
   "job-meta": "execution-proof",
 };
 
-// Map flow graph node IDs to verification step IDs
 function getNodeVerified(
   nodeId: string,
   result: VerificationResult
@@ -66,184 +64,133 @@ function getNodeVerified(
   if (!step) return null;
   if (step.status === "passed") return true;
   if (step.status === "failed") return false;
-  return null; // pending/running/skipped
+  return null;
 }
 
-export function TrustFlowGraph({ selectedSection, onSelectSection, verificationResult }: TrustFlowGraphProps) {
+// Edge style: highlighted = yellow, dimmed = faded, default = gray
+function getEdgeStyle(isHighlighted: boolean, isDimmed: boolean) {
+  if (isHighlighted) {
+    return { stroke: "#fbbf24", strokeWidth: 2 };
+  }
+  if (isDimmed) {
+    return { stroke: "#bbb", strokeWidth: 1, opacity: 0.3 };
+  }
+  return { stroke: "#bbb", strokeWidth: 1 };
+}
+
+interface NodeDef {
+  id: string;
+  label: string;
+  subtitle: string;
+  kind: "cert" | "signature" | "attestation" | "pcr" | "proof" | "output";
+  position: { x: number; y: number };
+  fields?: string[];
+}
+
+const NODE_DEFS: NodeDef[] = [
+  { id: "aws-root", label: "AWS Root Certificate", subtitle: "Trust Anchor", kind: "cert", position: { x: 180, y: 0 } },
+  { id: "intermediate", label: "Intermediate Certs", subtitle: "CA Bundle", kind: "cert", position: { x: 180, y: 100 } },
+  { id: "enclave-cert", label: "Enclave Certificate", subtitle: "End Entity", kind: "cert", position: { x: 180, y: 200 } },
+  { id: "signature", label: "COSE_Sign1", subtitle: "ES384 Signature", kind: "signature", position: { x: 20, y: 310 }, fields: ["algorithm", "key_id"] },
+  { id: "attestation", label: "Attestation Doc", subtitle: "CBOR Payload", kind: "attestation", position: { x: 180, y: 410 }, fields: ["module_id", "timestamp", "cabundle"] },
+  { id: "pcr0", label: "PCR0", subtitle: "Enclave Image", kind: "pcr", position: { x: 0, y: 530 } },
+  { id: "pcr1", label: "PCR1", subtitle: "Kernel", kind: "pcr", position: { x: 150, y: 530 } },
+  { id: "pcr2", label: "PCR2", subtitle: "Application", kind: "pcr", position: { x: 300, y: 530 } },
+  { id: "user-data", label: "User Data", subtitle: "Execution Proof", kind: "proof", position: { x: 100, y: 640 }, fields: ["job_id", "nonce", "output_hash"] },
+  { id: "output-hash", label: "Output Hash", subtitle: "SHA-256", kind: "output", position: { x: 50, y: 760 } },
+  { id: "job-meta", label: "Job Metadata", subtitle: "ID, Timestamp, Nonce", kind: "proof", position: { x: 250, y: 760 } },
+];
+
+const EDGE_DEFS: { id: string; source: string; target: string; label: string }[] = [
+  { id: "e1", source: "aws-root", target: "intermediate", label: "signs" },
+  { id: "e2", source: "intermediate", target: "enclave-cert", label: "signs" },
+  { id: "e3", source: "enclave-cert", target: "signature", label: "key for" },
+  { id: "e4", source: "signature", target: "attestation", label: "signs" },
+  { id: "e5", source: "attestation", target: "pcr0", label: "contains" },
+  { id: "e6", source: "attestation", target: "pcr1", label: "contains" },
+  { id: "e7", source: "attestation", target: "pcr2", label: "contains" },
+  { id: "e8", source: "attestation", target: "user-data", label: "contains" },
+  { id: "e9", source: "user-data", target: "output-hash", label: "contains" },
+  { id: "e10", source: "user-data", target: "job-meta", label: "contains" },
+];
+
+// Get all node IDs that belong to a section
+function getNodesForSection(section: SidebarSection): Set<string> {
+  const ids = new Set<string>();
+  for (const [nodeId, sec] of Object.entries(sectionMapping)) {
+    if (sec === section) ids.add(nodeId);
+  }
+  return ids;
+}
+
+export function TrustFlowGraph({
+  selectedSection,
+  onSelectSection,
+  verificationResult,
+}: TrustFlowGraphProps) {
+  const selectedNodeIds = useMemo(
+    () => getNodesForSection(selectedSection),
+    [selectedSection]
+  );
+
+  // Get connected node IDs (nodes connected by edge to any selected node)
+  const connectedNodeIds = useMemo(() => {
+    const connected = new Set<string>();
+    for (const edge of EDGE_DEFS) {
+      if (selectedNodeIds.has(edge.source) || selectedNodeIds.has(edge.target)) {
+        connected.add(edge.source);
+        connected.add(edge.target);
+      }
+    }
+    return connected;
+  }, [selectedNodeIds]);
+
   const nodes: Node[] = useMemo(
-    () => [
-      {
-        id: "aws-root",
-        type: "trust",
-        position: { x: 180, y: 0 },
-        data: {
-          label: "AWS Root Certificate",
-          subtitle: "Trust Anchor",
-          color: "blue",
-          verified: getNodeVerified("aws-root", verificationResult),
-          selected: sectionMapping["aws-root"] === selectedSection,
-        },
-        sourcePosition: Position.Bottom,
-        targetPosition: Position.Top,
-      },
-      {
-        id: "intermediate",
-        type: "trust",
-        position: { x: 180, y: 90 },
-        data: {
-          label: "Intermediate Certs",
-          subtitle: "CA Bundle",
-          color: "blue",
-          verified: getNodeVerified("intermediate", verificationResult),
-          selected: sectionMapping["intermediate"] === selectedSection,
-        },
-        sourcePosition: Position.Bottom,
-        targetPosition: Position.Top,
-      },
-      {
-        id: "enclave-cert",
-        type: "trust",
-        position: { x: 180, y: 180 },
-        data: {
-          label: "Enclave Certificate",
-          subtitle: "End Entity",
-          color: "blue",
-          verified: getNodeVerified("enclave-cert", verificationResult),
-          selected: sectionMapping["enclave-cert"] === selectedSection,
-        },
-        sourcePosition: Position.Bottom,
-        targetPosition: Position.Top,
-      },
-      {
-        id: "signature",
-        type: "trust",
-        position: { x: 30, y: 290 },
-        data: {
-          label: "COSE_Sign1",
-          subtitle: "ES384 Signature",
-          color: "purple",
-          verified: getNodeVerified("signature", verificationResult),
-          selected: sectionMapping["signature"] === selectedSection,
-        },
-        sourcePosition: Position.Bottom,
-        targetPosition: Position.Top,
-      },
-      {
-        id: "attestation",
-        type: "trust",
-        position: { x: 180, y: 380 },
-        data: {
-          label: "Attestation Document",
-          subtitle: "CBOR Payload",
-          color: "green",
-          verified: getNodeVerified("attestation", verificationResult),
-          selected: sectionMapping["attestation"] === selectedSection,
-        },
-        sourcePosition: Position.Bottom,
-        targetPosition: Position.Top,
-      },
-      {
-        id: "pcr0",
-        type: "trust",
-        position: { x: 0, y: 480 },
-        data: {
-          label: "PCR0",
-          subtitle: "Enclave Image",
-          color: "orange",
-          verified: getNodeVerified("pcr0", verificationResult),
-          selected: sectionMapping["pcr0"] === selectedSection,
-        },
-        sourcePosition: Position.Bottom,
-        targetPosition: Position.Top,
-      },
-      {
-        id: "pcr1",
-        type: "trust",
-        position: { x: 150, y: 480 },
-        data: {
-          label: "PCR1",
-          subtitle: "Kernel",
-          color: "orange",
-          verified: getNodeVerified("pcr1", verificationResult),
-          selected: sectionMapping["pcr1"] === selectedSection,
-        },
-        sourcePosition: Position.Bottom,
-        targetPosition: Position.Top,
-      },
-      {
-        id: "pcr2",
-        type: "trust",
-        position: { x: 300, y: 480 },
-        data: {
-          label: "PCR2",
-          subtitle: "Application",
-          color: "orange",
-          verified: getNodeVerified("pcr2", verificationResult),
-          selected: sectionMapping["pcr2"] === selectedSection,
-        },
-        sourcePosition: Position.Bottom,
-        targetPosition: Position.Top,
-      },
-      {
-        id: "user-data",
-        type: "trust",
-        position: { x: 100, y: 580 },
-        data: {
-          label: "User Data",
-          subtitle: "Execution Proof",
-          color: "yellow",
-          verified: getNodeVerified("user-data", verificationResult),
-          selected: sectionMapping["user-data"] === selectedSection,
-        },
-        sourcePosition: Position.Bottom,
-        targetPosition: Position.Top,
-      },
-      {
-        id: "output-hash",
-        type: "trust",
-        position: { x: 50, y: 680 },
-        data: {
-          label: "Output Hash",
-          subtitle: "SHA-256",
-          color: "green",
-          verified: getNodeVerified("output-hash", verificationResult),
-          selected: sectionMapping["output-hash"] === selectedSection,
-        },
-        sourcePosition: Position.Bottom,
-        targetPosition: Position.Top,
-      },
-      {
-        id: "job-meta",
-        type: "trust",
-        position: { x: 250, y: 680 },
-        data: {
-          label: "Job Metadata",
-          subtitle: "ID, Timestamp, Nonce",
-          color: "gray",
-          verified: getNodeVerified("job-meta", verificationResult),
-          selected: sectionMapping["job-meta"] === selectedSection,
-        },
-        sourcePosition: Position.Bottom,
-        targetPosition: Position.Top,
-      },
-    ],
-    [selectedSection, verificationResult]
+    () =>
+      NODE_DEFS.map((def) => {
+        const isHighlighted = selectedNodeIds.has(def.id);
+        const isDimmed =
+          selectedNodeIds.size > 0 &&
+          !isHighlighted &&
+          !connectedNodeIds.has(def.id);
+
+        return {
+          id: def.id,
+          type: "trust",
+          position: def.position,
+          data: {
+            label: def.label,
+            subtitle: def.subtitle,
+            kind: def.kind,
+            verified: getNodeVerified(def.id, verificationResult),
+            isHighlighted,
+            isDimmed,
+            fields: def.fields,
+          },
+          sourcePosition: Position.Bottom,
+          targetPosition: Position.Top,
+        };
+      }),
+    [selectedNodeIds, connectedNodeIds, verificationResult]
   );
 
   const edges: Edge[] = useMemo(
-    () => [
-      { id: "e1", source: "aws-root", target: "intermediate", label: "signs", markerEnd: { type: MarkerType.ArrowClosed }, style: { stroke: "#3b82f6" } },
-      { id: "e2", source: "intermediate", target: "enclave-cert", label: "signs", markerEnd: { type: MarkerType.ArrowClosed }, style: { stroke: "#3b82f6" } },
-      { id: "e3", source: "enclave-cert", target: "signature", label: "key for", markerEnd: { type: MarkerType.ArrowClosed }, style: { stroke: "#8b5cf6" } },
-      { id: "e4", source: "signature", target: "attestation", label: "signs", markerEnd: { type: MarkerType.ArrowClosed }, style: { stroke: "#8b5cf6" } },
-      { id: "e5", source: "attestation", target: "pcr0", label: "contains", markerEnd: { type: MarkerType.ArrowClosed }, style: { stroke: "#22c55e" } },
-      { id: "e6", source: "attestation", target: "pcr1", label: "contains", markerEnd: { type: MarkerType.ArrowClosed }, style: { stroke: "#22c55e" } },
-      { id: "e7", source: "attestation", target: "pcr2", label: "contains", markerEnd: { type: MarkerType.ArrowClosed }, style: { stroke: "#22c55e" } },
-      { id: "e8", source: "attestation", target: "user-data", label: "contains", markerEnd: { type: MarkerType.ArrowClosed }, style: { stroke: "#eab308" } },
-      { id: "e9", source: "user-data", target: "output-hash", label: "contains", markerEnd: { type: MarkerType.ArrowClosed }, style: { stroke: "#22c55e" } },
-      { id: "e10", source: "user-data", target: "job-meta", label: "contains", markerEnd: { type: MarkerType.ArrowClosed }, style: { stroke: "#6b7280" } },
-    ],
-    []
+    () =>
+      EDGE_DEFS.map((def) => {
+        const isHighlighted =
+          selectedNodeIds.has(def.source) || selectedNodeIds.has(def.target);
+        const isDimmed = selectedNodeIds.size > 0 && !isHighlighted;
+
+        return {
+          id: def.id,
+          source: def.source,
+          target: def.target,
+          label: def.label,
+          animated: isHighlighted,
+          style: getEdgeStyle(isHighlighted, isDimmed),
+        };
+      }),
+    [selectedNodeIds]
   );
 
   const onNodeClick = useCallback(
@@ -262,9 +209,15 @@ export function TrustFlowGraph({ selectedSection, onSelectSection, verificationR
         nodeTypes={nodeTypes}
         onNodeClick={onNodeClick}
         fitView
-        fitViewOptions={{ padding: 0.2 }}
-        minZoom={0.5}
+        fitViewOptions={{ padding: 0.15 }}
+        minZoom={0.3}
         maxZoom={1.5}
+        nodesConnectable={false}
+        nodesDraggable={false}
+        elementsSelectable
+        panOnDrag
+        zoomOnScroll
+        zoomOnPinch
       >
         <Background gap={16} size={1} />
         <Controls showInteractive={false} />

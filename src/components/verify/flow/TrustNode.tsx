@@ -1,63 +1,80 @@
 import { Handle, Position, type NodeProps } from "@xyflow/react";
-import { CheckCircle2, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Separator } from "@/components/ui/separator";
 
 interface TrustNodeData {
   label: string;
   subtitle: string;
-  color: "blue" | "purple" | "green" | "orange" | "yellow" | "gray";
+  kind: "cert" | "signature" | "attestation" | "pcr" | "proof" | "output";
   verified: boolean | null;
-  selected: boolean;
+  isHighlighted: boolean;
+  isDimmed: boolean;
+  fields?: string[];
   [key: string]: unknown;
 }
 
-const colorClasses: Record<string, { bg: string; border: string; selectedBorder: string }> = {
-  blue: { bg: "bg-blue-50", border: "border-blue-200", selectedBorder: "border-blue-500" },
-  purple: { bg: "bg-purple-50", border: "border-purple-200", selectedBorder: "border-purple-500" },
-  green: { bg: "bg-green-50", border: "border-green-200", selectedBorder: "border-green-500" },
-  orange: { bg: "bg-orange-50", border: "border-orange-200", selectedBorder: "border-orange-500" },
-  yellow: { bg: "bg-yellow-50", border: "border-yellow-200", selectedBorder: "border-yellow-500" },
-  gray: { bg: "bg-gray-50", border: "border-gray-200", selectedBorder: "border-gray-500" },
+const kindBorder: Record<string, string> = {
+  cert: "border-blue-300",
+  signature: "border-purple-300",
+  attestation: "border-green-300",
+  pcr: "border-orange-300",
+  proof: "border-yellow-300",
+  output: "border-emerald-300",
 };
 
-function VerifiedIcon({ verified }: { verified: boolean | null }) {
+function VerifiedDot({ verified }: { verified: boolean | null }) {
   if (verified === true) {
-    return <CheckCircle2 className="h-3.5 w-3.5 text-green-600 shrink-0" />;
+    return <span className="inline-block h-2 w-2 rounded-full bg-emerald-500 shrink-0" />;
   }
   if (verified === false) {
-    return <XCircle className="h-3.5 w-3.5 text-red-600 shrink-0" />;
+    return <span className="inline-block h-2 w-2 rounded-full bg-red-500 shrink-0" />;
   }
-  // null = pending/running — gray pulsing dot
   return (
-    <span className="relative flex h-3.5 w-3.5 shrink-0">
-      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-gray-400 opacity-75"></span>
-      <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-gray-400"></span>
+    <span className="relative flex h-2 w-2 shrink-0">
+      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-gray-400 opacity-75" />
+      <span className="relative inline-flex rounded-full h-2 w-2 bg-gray-300" />
     </span>
   );
 }
 
 export function TrustNode({ data }: NodeProps) {
-  const nodeData = data as TrustNodeData;
-  const colors = colorClasses[nodeData.color] || colorClasses.gray;
+  const d = data as TrustNodeData;
+  const border = kindBorder[d.kind] || "border-gray-200";
 
   return (
     <div
       className={cn(
-        "rounded-lg border-2 px-3 py-2 shadow-sm min-w-[130px] cursor-pointer transition-all",
-        colors.bg,
-        nodeData.selected ? colors.selectedBorder : colors.border,
-        nodeData.selected && "shadow-md ring-2 ring-offset-1 ring-primary/30"
+        "relative min-w-[120px] max-w-[220px] select-none rounded-md bg-background p-2 text-left text-xs transition-all duration-200",
+        d.isHighlighted
+          ? "border-2 border-yellow-300 shadow-lg ring-2 ring-yellow-300"
+          : `border-2 ${border}`,
+        d.isDimmed && "opacity-30"
       )}
     >
-      <Handle type="target" position={Position.Top} className="!bg-gray-400 !w-2 !h-2" />
-      <div className="flex items-center justify-between gap-2">
-        <div>
-          <p className="text-xs font-semibold leading-tight">{nodeData.label}</p>
-          <p className="text-[10px] text-muted-foreground leading-tight">{nodeData.subtitle}</p>
-        </div>
-        <VerifiedIcon verified={nodeData.verified} />
+      <Handle type="target" position={Position.Top} className="!bg-transparent !border-2 !border-gray-300 !w-2 !h-2" />
+
+      {/* Header */}
+      <div className="flex items-center gap-1.5">
+        <VerifiedDot verified={d.verified} />
+        <span className="font-medium text-sm leading-tight truncate">{d.label}</span>
       </div>
-      <Handle type="source" position={Position.Bottom} className="!bg-gray-400 !w-2 !h-2" />
+      <p className="text-muted-foreground text-[10px] leading-tight mt-0.5 ml-3.5">{d.subtitle}</p>
+
+      {/* Fields */}
+      {d.fields && d.fields.length > 0 && (
+        <>
+          <Separator className="my-1.5" />
+          <ul className="space-y-0">
+            {d.fields.map((field) => (
+              <li key={field} className="text-[10px] text-muted-foreground truncate px-0.5">
+                {field}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+
+      <Handle type="source" position={Position.Bottom} className="!bg-purple-400 !w-2 !h-2 !border-0" />
     </div>
   );
 }
