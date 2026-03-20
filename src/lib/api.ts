@@ -124,3 +124,89 @@ export function fetchJobVerification(jobId: string) {
   return fetchJSON<JobVerification>(`/verify/${encodeURIComponent(jobId)}`);
 }
 
+// ── ATL (Attestation Transparency Log) ──
+
+export interface ATLStatus {
+  enabled: boolean;
+  connected?: boolean;
+  sth?: {
+    tree_size: number;
+    root_hash: string;
+    timestamp: number;
+  };
+}
+
+export interface ATLEntry {
+  leaf_index: number;
+  entry_type: number;
+  entry_type_label: "HA" | "LA" | "Config";
+  leaf_hash: string;
+  job_id: string | null;
+  tee_platform: string | null;
+  submitter_id: string;
+  submitted_at: string;
+}
+
+export interface PaginatedATLEntries {
+  entries: ATLEntry[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    total_pages: number;
+  };
+}
+
+export interface ATLSTH {
+  tree_size: number;
+  root_hash: string;
+  timestamp: number;
+  signature: string;
+  created_at: string;
+}
+
+export interface ATLSTHHistory {
+  history: {
+    tree_size: number;
+    root_hash: string;
+    timestamp: number;
+    created_at: string;
+  }[];
+}
+
+export interface ATLStats {
+  total_entries: number;
+  by_type: Record<string, number>;
+  latest_sth: {
+    tree_size: number;
+    timestamp: number;
+    created_at: string;
+  } | null;
+}
+
+export function fetchATLStatus() {
+  return fetchJSON<ATLStatus>("/atl/status");
+}
+
+export function fetchATLEntries(page = 1, limit = 25, type?: number) {
+  const params = new URLSearchParams({ page: String(page), limit: String(limit) });
+  if (type) params.set("type", String(type));
+  return fetchJSON<PaginatedATLEntries>(`/atl/entries?${params}`);
+}
+
+export function fetchATLSTH() {
+  return fetchJSON<ATLSTH>("/atl/sth");
+}
+
+export function fetchATLSTHHistory() {
+  return fetchJSON<ATLSTHHistory>("/atl/sth/history");
+}
+
+export function fetchATLEntry(index: number) {
+  return fetchJSON<ATLEntry>(`/atl/entry/${index}`);
+}
+
+export function fetchATLStats() {
+  return fetchJSON<ATLStats>("/atl/stats");
+}
+
