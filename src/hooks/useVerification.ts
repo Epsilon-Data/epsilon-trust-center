@@ -14,6 +14,20 @@ const INITIAL_RESULT: VerificationResult = {
   certChainInfo: null,
 };
 
+// Cache dev config so we don't fetch it on every verification
+let devConfigCache: { devMode: boolean; rootCertPem?: string } | null = null;
+
+async function getDevConfig() {
+  if (devConfigCache) return devConfigCache;
+  try {
+    const res = await fetch("/api/dev/config");
+    devConfigCache = await res.json();
+  } catch {
+    devConfigCache = { devMode: false };
+  }
+  return devConfigCache!;
+}
+
 export function useVerification(job: JobVerification | undefined) {
   const [result, setResult] = useState<VerificationResult>(INITIAL_RESULT);
 
@@ -53,10 +67,14 @@ export function useVerification(job: JobVerification | undefined) {
         ],
       });
 
+      // Check if running in dev mode with a local root CA
+      const devConfig = await getDevConfig();
+
       const verifyResult = await verifyAttestation(attestationDoc!, {
         expectedPcrs: job?.enclave_pcrs?.expected ?? undefined,
         expectedOutputHash: job?.execution_output_hash ?? undefined,
-        allowExpired: true, // Nitro leaf certs are valid ~3h; historical attestations will always be expired
+        allowExpired: true,
+        customRootCertPem: devConfig.devMode ? devConfig.rootCertPem : undefined,
         onStepUpdate,
       });
 

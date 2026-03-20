@@ -4,6 +4,7 @@ import {
   Link2,
   FileCheck,
   Hash,
+  TreePine,
   FileCode,
 } from "lucide-react";
 import type { VerificationResult } from "@epsilon-data/nitro-verify";
@@ -17,6 +18,7 @@ export const sectionStepMap: Record<SidebarSection, string> = {
   "certificate-chain": "cert-chain",
   "execution-proof": "parse",
   "output-integrity": "output-hash",
+  "transparency-log": "parse",
   "raw-document": "parse",
 };
 
@@ -73,6 +75,12 @@ export const sections: SectionItem[] = [
     label: "Output Integrity",
     icon: Hash,
     description: "SHA-256 output hash match",
+  },
+  {
+    id: "transparency-log",
+    label: "Transparency Log",
+    icon: TreePine,
+    description: "Append-only Merkle tree inclusion",
   },
   {
     id: "raw-document",

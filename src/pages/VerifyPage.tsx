@@ -15,6 +15,7 @@ import {
   OutputIntegrityDetail,
   RawDocumentDetail,
 } from "@/components/verify/VerifyDetail";
+import { TransparencyLogDetail } from "@/components/verify/TransparencyLogDetail";
 import { SimpleVerificationView } from "@/components/verify/simple/SimpleVerificationView";
 import { sections, sectionStepMap, getStepStatus } from "@/lib/verify-sections";
 import { fetchJobVerification } from "@/lib/api";
@@ -107,6 +108,7 @@ export default function VerifyPage({ params }: VerifyPageProps) {
       case "certificate-chain": return <CertificateChainDetail job={job!} result={verificationResult} />;
       case "execution-proof": return <ExecutionProofDetail job={job!} result={verificationResult} />;
       case "output-integrity": return <OutputIntegrityDetail job={job!} result={verificationResult} />;
+      case "transparency-log": return <TransparencyLogDetail job={job!} />;
       case "raw-document": return <RawDocumentDetail job={job!} />;
     }
   }
@@ -138,10 +140,9 @@ export default function VerifyPage({ params }: VerifyPageProps) {
         </div>
       </div>
 
-      {/* Dual verification banners */}
+      {/* Verification banner */}
       {hasAttestation && (
         <div className="shrink-0">
-          <ServerVerificationBanner serverVerification={job.server_verification} />
           <ClientVerificationBanner
             status={verificationResult.status}
             valid={verificationResult.valid}
@@ -253,6 +254,8 @@ function RightDetailPanel({
         return <ExecutionProofDetail job={job} result={verificationResult} />;
       case "output-integrity":
         return <OutputIntegrityDetail job={job} result={verificationResult} />;
+      case "transparency-log":
+        return <TransparencyLogDetail job={job} />;
       case "raw-document":
         return <RawDocumentDetail job={job} />;
     }

@@ -45,6 +45,11 @@ export function Header() {
             <Link href="/">
               <Button variant="ghost" size="sm">Jobs</Button>
             </Link>
+            {/* Transparency Log — hidden until ATL integration is complete
+            <Link href="/transparency">
+              <Button variant="ghost" size="sm">Log</Button>
+            </Link>
+            */}
             <Link href="/verify">
               <Button variant="ghost" size="sm">Verify</Button>
             </Link>

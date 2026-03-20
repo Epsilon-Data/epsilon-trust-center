@@ -369,6 +369,237 @@ app.get("/api/pcr-registry", async (_req, res) => {
   }
 });
 
+// ── ATL (Attestation Transparency Log) proxy ──
+// Proxies requests to the ATL service, converting CBOR→JSON for the frontend.
+// All ATL endpoints are public (no auth on GET).
+const ATL_BASE_URL = process.env.ATL_BASE_URL || "";
+
+interface ATLSTHResponse {
+  tree_size: number;
+  root_hash: string;
+  timestamp: number;
+  signature: string;
+}
+
+// GET /api/atl/status — ATL availability + latest STH
+app.get("/api/atl/status", async (_req, res) => {
+  if (!ATL_BASE_URL) {
+    res.json({ enabled: false });
+    return;
+  }
+  try {
+    const sthRes = await fetch(`${ATL_BASE_URL}/v1/sth`);
+    if (!sthRes.ok) {
+      res.json({ enabled: true, connected: false });
+      return;
+    }
+    // ATL returns CBOR, but we also accept JSON for flexibility
+    const contentType = sthRes.headers.get("content-type") || "";
+    let sth: ATLSTHResponse;
+    if (contentType.includes("cbor")) {
+      // For CBOR responses, read as buffer and decode
+      // Since we don't have a CBOR decoder in the frontend server,
+      // we'll configure ATL to also support JSON, or use raw bytes
+      // For now, try JSON first
+      const text = await sthRes.text();
+      sth = JSON.parse(text);
+    } else {
+      sth = await sthRes.json() as ATLSTHResponse;
+    }
+    res.json({
+      enabled: true,
+      connected: true,
+      sth: {
+        tree_size: sth.tree_size,
+        root_hash: Buffer.isBuffer(sth.root_hash) ? Buffer.from(sth.root_hash).toString("hex") : sth.root_hash,
+        timestamp: sth.timestamp,
+      },
+    });
+  } catch (err) {
+    console.warn("ATL status check failed:", err);
+    res.json({ enabled: true, connected: false });
+  }
+});
+
+// GET /api/atl/entries — paginated log entries from the ATL database directly
+app.get("/api/atl/entries", async (req, res) => {
+  try {
+    const page = Math.max(1, parseInt(req.query.page as string) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string) || 25));
+    const offset = (page - 1) * limit;
+    const entryType = req.query.type as string | undefined;
+
+    let whereClause = "";
+    const params: (number | string)[] = [limit, offset];
+
+    if (entryType && ["1", "2", "3"].includes(entryType)) {
+      whereClause = "WHERE entry_type = $3";
+      params.push(parseInt(entryType));
+    }
+
+    const [entriesResult, countResult] = await Promise.all([
+      pool.query(
+        `SELECT leaf_index, entry_type, leaf_hash, job_id, tee_platform, submitter_id, submitted_at
+         FROM atl_entries
+         ${whereClause}
+         ORDER BY leaf_index DESC
+         LIMIT $1 OFFSET $2`,
+        params
+      ),
+      pool.query(
+        `SELECT COUNT(*) FROM atl_entries ${whereClause}`,
+        entryType && ["1", "2", "3"].includes(entryType) ? [parseInt(entryType)] : []
+      ),
+    ]);
+
+    const total = parseInt(countResult.rows[0].count) || 0;
+
+    const entries = entriesResult.rows.map((row) => ({
+      leaf_index: parseInt(row.leaf_index) - 1, // 0-based for display
+      entry_type: row.entry_type,
+      entry_type_label: row.entry_type === 1 ? "HA" : row.entry_type === 2 ? "LA" : "Config",
+      leaf_hash: row.leaf_hash instanceof Buffer ? row.leaf_hash.toString("hex") : row.leaf_hash,
+      job_id: row.job_id || null,
+      tee_platform: row.tee_platform || null,
+      submitter_id: row.submitter_id,
+      submitted_at: row.submitted_at,
+    }));
+
+    res.json({
+      entries,
+      pagination: { page, limit, total, total_pages: Math.ceil(total / limit) },
+    });
+  } catch (err) {
+    console.error("ATL entries error:", err);
+    res.status(500).json({ message: "Failed to fetch ATL entries" });
+  }
+});
+
+// GET /api/atl/sth — latest signed tree head
+app.get("/api/atl/sth", async (_req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT tree_size, root_hash, timestamp, signature, created_at
+       FROM tree_heads ORDER BY id DESC LIMIT 1`
+    );
+    if (result.rows.length === 0) {
+      res.status(404).json({ message: "No STH available" });
+      return;
+    }
+    const row = result.rows[0];
+    res.json({
+      tree_size: parseInt(row.tree_size),
+      root_hash: row.root_hash instanceof Buffer ? row.root_hash.toString("hex") : row.root_hash,
+      timestamp: parseInt(row.timestamp),
+      signature: row.signature instanceof Buffer ? row.signature.toString("hex") : row.signature,
+      created_at: row.created_at,
+    });
+  } catch (err) {
+    console.error("ATL STH error:", err);
+    res.status(500).json({ message: "Failed to fetch STH" });
+  }
+});
+
+// GET /api/atl/sth/history — recent STH history for consistency display
+app.get("/api/atl/sth/history", async (_req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT tree_size, root_hash, timestamp, created_at
+       FROM tree_heads ORDER BY id DESC LIMIT 20`
+    );
+    const history = result.rows.map((row) => ({
+      tree_size: parseInt(row.tree_size),
+      root_hash: row.root_hash instanceof Buffer ? row.root_hash.toString("hex") : row.root_hash,
+      timestamp: parseInt(row.timestamp),
+      created_at: row.created_at,
+    }));
+    res.json({ history });
+  } catch (err) {
+    console.error("ATL STH history error:", err);
+    res.status(500).json({ message: "Failed to fetch STH history" });
+  }
+});
+
+// GET /api/atl/entry/:index — single entry detail
+app.get("/api/atl/entry/:index", async (req, res) => {
+  try {
+    const index = parseInt(req.params.index);
+    if (isNaN(index) || index < 0) {
+      res.status(400).json({ message: "Invalid index" });
+      return;
+    }
+    // leaf_index is 1-based in DB, index is 0-based
+    const result = await pool.query(
+      `SELECT leaf_index, entry_type, leaf_hash, job_id, tee_platform, submitter_id, submitted_at
+       FROM atl_entries WHERE leaf_index = $1`,
+      [index + 1]
+    );
+    if (result.rows.length === 0) {
+      res.status(404).json({ message: `Entry ${index} not found` });
+      return;
+    }
+    const row = result.rows[0];
+    res.json({
+      leaf_index: parseInt(row.leaf_index) - 1,
+      entry_type: row.entry_type,
+      entry_type_label: row.entry_type === 1 ? "HA" : row.entry_type === 2 ? "LA" : "Config",
+      leaf_hash: row.leaf_hash instanceof Buffer ? row.leaf_hash.toString("hex") : row.leaf_hash,
+      job_id: row.job_id || null,
+      tee_platform: row.tee_platform || null,
+      submitter_id: row.submitter_id,
+      submitted_at: row.submitted_at,
+    });
+  } catch (err) {
+    console.error("ATL entry error:", err);
+    res.status(500).json({ message: "Failed to fetch entry" });
+  }
+});
+
+// GET /api/atl/stats — ATL-specific stats
+app.get("/api/atl/stats", async (_req, res) => {
+  try {
+    const [countResult, typeResult, sthResult] = await Promise.all([
+      pool.query(`SELECT COUNT(*) FROM atl_entries`),
+      pool.query(
+        `SELECT entry_type, COUNT(*) as count FROM atl_entries GROUP BY entry_type ORDER BY entry_type`
+      ),
+      pool.query(`SELECT tree_size, timestamp, created_at FROM tree_heads ORDER BY id DESC LIMIT 1`),
+    ]);
+
+    const typeCounts: Record<string, number> = {};
+    for (const row of typeResult.rows) {
+      const label = row.entry_type === 1 ? "ha" : row.entry_type === 2 ? "la" : "config";
+      typeCounts[label] = parseInt(row.count);
+    }
+
+    const sth = sthResult.rows[0];
+
+    res.json({
+      total_entries: parseInt(countResult.rows[0].count) || 0,
+      by_type: typeCounts,
+      latest_sth: sth ? {
+        tree_size: parseInt(sth.tree_size),
+        timestamp: parseInt(sth.timestamp),
+        created_at: sth.created_at,
+      } : null,
+    });
+  } catch (err) {
+    console.error("ATL stats error:", err);
+    res.status(500).json({ message: "Failed to fetch ATL stats" });
+  }
+});
+
+// DEV_MODE: serve local attestation root CA for client-side verification
+const DEV_MODE = process.env.DEV_MODE === "true";
+const LOCAL_ROOT_CERT_PEM = process.env.LOCAL_ROOT_CERT_PEM || "";
+
+app.get("/api/dev/config", (_req, res) => {
+  res.json({
+    devMode: DEV_MODE,
+    ...(DEV_MODE && LOCAL_ROOT_CERT_PEM ? { rootCertPem: LOCAL_ROOT_CERT_PEM } : {}),
+  });
+});
+
 // Serve static frontend in production (dist/public/ from vite build)
 const clientDist = path.resolve(__dirname, "public");
 app.use(express.static(clientDist));

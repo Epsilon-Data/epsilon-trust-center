@@ -4,4 +4,5 @@ export type SidebarSection =
   | "certificate-chain"
   | "execution-proof"
   | "output-integrity"
+  | "transparency-log"
   | "raw-document";

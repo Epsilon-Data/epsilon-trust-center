@@ -421,9 +421,8 @@ function CompactPCRComparison({
   const pcrKeys = ["pcr0", "pcr1", "pcr2"] as const;
   const labels = ["PCR0 (Enclave Image)", "PCR1 (Kernel)", "PCR2 (Application)"];
   const sources = [
-    { key: "Server", pcrs: serverPcrs },
-    { key: "GitHub", pcrs: registryPcrs },
-    { key: "Browser", pcrs: browserPcrs },
+    { key: "Attestation", pcrs: browserPcrs || serverPcrs },
+    { key: "Published", pcrs: registryPcrs },
   ].filter((s) => s.pcrs) as { key: string; pcrs: Record<string, string> }[];
 
   return (

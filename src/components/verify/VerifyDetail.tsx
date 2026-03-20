@@ -131,25 +131,24 @@ function PCRComparisonRow({
   registryValue?: string;
   browserValue?: string;
 }) {
-  // Use the first available value as reference for comparison
-  const referenceValue = registryValue || serverValue || browserValue;
-  const allValues = [serverValue, registryValue, browserValue].filter(Boolean);
-  const allMatch = allValues.length >= 2 && allValues.every((v) => v === referenceValue);
+  // Use browser (client-side) value as the attestation source, registry as expected
+  const attestationValue = browserValue || serverValue;
+  const expectedValue = registryValue;
+  const allMatch = attestationValue && expectedValue && attestationValue === expectedValue;
 
   return (
     <div className="border rounded-lg p-4">
       <div className="flex items-center justify-between mb-3">
         <h4 className="text-sm font-semibold">{label}</h4>
-        {allValues.length >= 2 && (
+        {attestationValue && expectedValue && (
           <Badge variant={allMatch ? "success" : "destructive"} className="text-xs">
-            {allMatch ? "All match" : "Mismatch"}
+            {allMatch ? "Match" : "Mismatch"}
           </Badge>
         )}
       </div>
       <div className="divide-y">
-        <PCRSourceRow source="Server parse" icon={Server} value={serverValue} referenceValue={referenceValue} />
-        <PCRSourceRow source="GitHub registry" icon={Globe} value={registryValue} referenceValue={referenceValue} href={PCR_REGISTRY_URL} />
-        <PCRSourceRow source="Your browser" icon={Monitor} value={browserValue} referenceValue={referenceValue} />
+        <PCRSourceRow source="Attestation" icon={Monitor} value={attestationValue} referenceValue={expectedValue} />
+        <PCRSourceRow source="Published" icon={Globe} value={expectedValue} referenceValue={expectedValue} href={PCR_REGISTRY_URL} />
       </div>
     </div>
   );
@@ -178,35 +177,24 @@ export function EnclaveImageDetail({ job, result }: { job: JobVerification; resu
         </div>
         <CardDescription>
           Platform Configuration Registers (PCRs) are hardware-measured hashes that
-          identify the exact code running in the enclave. Three independent sources
-          are compared below for full transparency.
+          identify the exact code running in the enclave. The attestation values are
+          compared against the published registry for verification.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-5">
-        {/* Verification status banners */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {serverVerification && (
-            <div className={`rounded-lg border p-3 flex items-center gap-2 ${serverVerification.checks.pcr_verified ? "bg-green-50 border-green-200" : "bg-red-50 border-red-200"}`}>
-              <Server className="h-4 w-4 shrink-0" />
-              <div>
-                <p className={`text-sm font-medium ${serverVerification.checks.pcr_verified ? "text-green-800" : "text-red-800"}`}>
-                  Server: PCR {serverVerification.checks.pcr_verified ? "verified" : "mismatch"}
-                </p>
-                <p className="text-xs text-muted-foreground">Pre-computed by verifier</p>
-              </div>
-            </div>
-          )}
+        {/* Verification status banner */}
+        <div className="grid grid-cols-1 gap-3">
           <div className={`rounded-lg border p-3 flex items-center gap-2 ${pcrStep?.status === "passed" ? "bg-green-50 border-green-200" : pcrStep?.status === "failed" ? "bg-red-50 border-red-200" : "bg-yellow-50 border-yellow-200"}`}>
             <Monitor className="h-4 w-4 shrink-0" />
             <div>
               <p className={`text-sm font-medium ${pcrStep?.status === "passed" ? "text-green-800" : pcrStep?.status === "failed" ? "text-red-800" : "text-yellow-800"}`}>
                 {pcrStep?.status === "passed"
-                  ? "Browser: PCR verified"
+                  ? "PCR verified"
                   : pcrStep?.status === "failed"
-                    ? "Browser: PCR mismatch"
-                    : "Browser: Checking PCRs..."}
+                    ? "PCR mismatch"
+                    : "Checking PCRs..."}
               </p>
-              <p className="text-xs text-muted-foreground">Verified in your browser</p>
+              <p className="text-xs text-muted-foreground">Verified client-side in your browser</p>
             </div>
           </div>
         </div>
@@ -266,14 +254,12 @@ export function EnclaveImageDetail({ job, result }: { job: JobVerification; resu
         {/* Educational note */}
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
           <p className="text-sm text-blue-800">
-            <strong>Why three sources?</strong> The server parses PCRs from the raw attestation document.
-            The{" "}
+            <strong>How verification works:</strong> Your browser parses the attestation document client-side
+            using CBOR decoding and extracts the PCR values. These are compared against the{" "}
             <a href={PCR_REGISTRY_URL} target="_blank" rel="noopener noreferrer" className="underline font-medium">
-              GitHub registry
+              published PCR registry
             </a>{" "}
-            publishes expected PCRs for each enclave version.
-            Your browser independently parses the same attestation using client-side CBOR decoding.
-            If all three agree, you have strong assurance the enclave image is genuine.
+            on GitHub. If both match, the enclave image is genuine.
           </p>
         </div>
       </CardContent>
