@@ -11,6 +11,10 @@ FROM base AS deps
 COPY package.json package-lock.json ./
 
 RUN npm ci
+# Ensure platform-specific rollup binary is available (npm ci may skip optional deps)
+RUN npm install --no-save @rollup/rollup-linux-arm64-musl 2>/dev/null; \
+    npm install --no-save @rollup/rollup-linux-x64-musl 2>/dev/null; \
+    true
 
 # ---- Builder ----
 FROM base AS builder
