@@ -1,4 +1,4 @@
-import { Check, HelpCircle, ExternalLink, ShieldCheck, Lock, XCircle } from "lucide-react";
+import { Check, ShieldCheck, Lock, XCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { HashDisplay } from "@/components/shared/HashDisplay";
 import { VerificationSection } from "./VerificationSection";

@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { HashDisplay } from "@/components/shared/HashDisplay";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { FieldRow } from "@/components/shared/FieldRow";
-import { Download, ExternalLink, CheckCircle2, XCircle, Server, Globe, Monitor } from "lucide-react";
+import { Download, ExternalLink, CheckCircle2, XCircle, Globe, Monitor } from "lucide-react";
 import type { JobVerification } from "@/lib/api";
 import type { VerificationResult } from "@epsilon-data/nitro-verify";
 

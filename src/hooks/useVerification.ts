@@ -48,7 +48,6 @@ export function useVerification(job: JobVerification | undefined) {
     const attestationDoc =
       job?.attestation?.attestation?.attestation_document;
     if (!attestationDoc) {
-      setResult(INITIAL_RESULT);
       return;
     }
 

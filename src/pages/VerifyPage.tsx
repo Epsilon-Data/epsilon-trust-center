@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
-import { ArrowLeft, Loader2, Monitor, Server, ShieldCheck, ShieldAlert } from "lucide-react";
+import { ArrowLeft, Loader2, Monitor, ShieldCheck, ShieldAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { TrustFlowGraph } from "@/components/verify/TrustFlowGraph";
@@ -264,42 +264,6 @@ function RightDetailPanel({
   return (
     <div ref={panelRef} className="p-4">
       {renderContent()}
-    </div>
-  );
-}
-
-function ServerVerificationBanner({
-  serverVerification,
-}: {
-  serverVerification: JobVerification["server_verification"];
-}) {
-  if (!serverVerification) return null;
-
-  if (serverVerification.valid) {
-    return (
-      <div className="border-b px-4 py-2.5 bg-green-50 border-green-200 flex items-center gap-3">
-        <ShieldCheck className="h-4 w-4 text-green-700" />
-        <span className="text-sm text-green-800 font-medium">
-          Server verification: all checks passed
-        </span>
-        <Badge variant="outline" className="ml-auto text-xs gap-1 border-green-300 text-green-700">
-          <Server className="h-3 w-3" />
-          Pre-computed
-        </Badge>
-      </div>
-    );
-  }
-
-  return (
-    <div className="border-b px-4 py-2.5 bg-red-50 border-red-200 flex items-center gap-3">
-      <ShieldAlert className="h-4 w-4 text-red-700" />
-      <span className="text-sm text-red-800 font-medium">
-        Server verification: one or more checks failed
-      </span>
-      <Badge variant="outline" className="ml-auto text-xs gap-1 border-red-300 text-red-700">
-        <Server className="h-3 w-3" />
-        Pre-computed
-      </Badge>
     </div>
   );
 }
