@@ -11,12 +11,15 @@ When code runs inside an AWS Nitro Enclave, the hardware generates a cryptograph
 - Embeds the **SHA-256 hash** of execution output in the `user_data` field
 - Includes a **certificate chain** traceable to the AWS root certificate
 
-The Trust Center performs verification both **server-side** (pre-computed) and **client-side** (in your browser using WebCrypto), so you don't need to trust anyone.
+The Trust Center performs **client-side** verification entirely in your browser using WebCrypto — you don't need to trust anyone.
+
+In **DEV_MODE**, the Trust Center can verify locally-generated attestation documents signed by a local CA instead of the AWS Nitro root.
 
 ## Features
 
 - **Public job ledger** — browse all verified executions with pagination
-- **Dual verification** — server-side + client-side cryptographic checks
+- **Client-side verification** — cryptographic checks run entirely in your browser
+- **DEV_MODE** — verify locally-generated attestation documents with a custom root CA
 - **Interactive trust chain graph** — React Flow visualization of the attestation trust chain
 - **PCR registry comparison** — compare enclave measurements against published expected values
 - **Manual verification** — paste any raw base64 attestation document for browser-only verification
@@ -92,6 +95,8 @@ npm start
 | `EXPECTED_PCR0` | No | — | Fallback PCR0 value if GitHub fetch fails |
 | `EXPECTED_PCR1` | No | — | Fallback PCR1 value |
 | `EXPECTED_PCR2` | No | — | Fallback PCR2 value |
+| `DEV_MODE` | No | `false` | Enable local attestation verification with custom root CA |
+| `LOCAL_ROOT_CERT_PEM` | No | — | PEM-encoded root CA certificate for DEV_MODE |
 
 ## API Endpoints
 
@@ -103,6 +108,7 @@ All endpoints are read-only. No authentication required.
 | `GET` | `/api/jobs?page=1&limit=25` | Paginated public job ledger |
 | `GET` | `/api/verify/:jobId` | Full attestation data for a job |
 | `GET` | `/api/pcr-registry` | Published expected PCR values |
+| `GET` | `/api/dev/config` | DEV_MODE status and root cert (only when DEV_MODE=true) |
 
 ## Project Structure
 
@@ -113,10 +119,11 @@ All endpoints are read-only. No authentication required.
 ├── src/
 │   ├── App.tsx           # Router setup
 │   ├── pages/
-│   │   ├── HomePage.tsx          # Stats + public job ledger
-│   │   ├── VerifyPage.tsx        # Job verification (graph + details)
-│   │   ├── ManualVerifyPage.tsx  # Paste-your-own attestation
-│   │   └── AboutPage.tsx         # How attestation works
+│   │   ├── HomePage.tsx              # Stats + public job ledger
+│   │   ├── VerifyPage.tsx            # Job verification (graph + details)
+│   │   ├── TransparencyLogPage.tsx   # Transparency log with Merkle tree
+│   │   ├── ManualVerifyPage.tsx      # Paste-your-own attestation
+│   │   └── AboutPage.tsx             # How attestation works
 │   ├── components/
 │   │   ├── verify/       # Verification UI (detail cards, graph, CLI)
 │   │   ├── shared/       # StatusBadge, HashDisplay, FieldRow
@@ -130,6 +137,20 @@ All endpoints are read-only. No authentication required.
 │       ├── verify-sections.ts  # Verification section config
 │       └── utils.ts      # cn(), truncateHash(), formatTimeAgo()
 ```
+
+## Docker
+
+```bash
+# Build
+docker build -t epsilon-trust-center .
+
+# Run
+docker run -p 3001:3001 \
+  -e DATABASE_URL=postgresql://user:pass@host:5432/db \
+  epsilon-trust-center
+```
+
+Pre-built images are available at `ghcr.io/epsilon-data/epsilon-trust-center`.
 
 ## Verification Steps
 
