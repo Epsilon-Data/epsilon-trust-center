@@ -24,7 +24,7 @@ export function Header() {
           <Shield className="h-5 w-5 text-primary" />
           <span>EPSILON</span>
           <span className="text-muted-foreground font-normal text-sm hidden sm:inline">
-            Trust Center
+            Trust Hub
           </span>
         </Link>
 

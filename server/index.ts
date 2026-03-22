@@ -609,7 +609,7 @@ app.get("/{*splat}", (_req, res) => {
 
 const port = parseInt(process.env.PORT || "3001", 10);
 const server = app.listen(port, "0.0.0.0", () => {
-  console.log(`Trust Center running on port ${port}`);
+  console.log(`Trust Hub running on port ${port}`);
 });
 
 // Graceful shutdown
