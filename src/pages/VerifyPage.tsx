@@ -16,6 +16,7 @@ import {
   RawDocumentDetail,
 } from "@/components/verify/VerifyDetail";
 import { TransparencyLogDetail } from "@/components/verify/TransparencyLogDetail";
+import { DataTransportDetail } from "@/components/verify/DataTransportDetail";
 import { SimpleVerificationView } from "@/components/verify/simple/SimpleVerificationView";
 import { sections, sectionStepMap, getStepStatus } from "@/lib/verify-sections";
 import { fetchJobVerification } from "@/lib/api";
@@ -106,6 +107,7 @@ export default function VerifyPage({ params }: VerifyPageProps) {
       case "hardware": return <HardwareDetail job={job!} result={verificationResult} />;
       case "enclave-image": return <EnclaveImageDetail job={job!} result={verificationResult} />;
       case "certificate-chain": return <CertificateChainDetail job={job!} result={verificationResult} />;
+      case "data-transport": return <DataTransportDetail />;
       case "execution-proof": return <ExecutionProofDetail job={job!} result={verificationResult} />;
       case "output-integrity": return <OutputIntegrityDetail job={job!} result={verificationResult} />;
       case "transparency-log": return <TransparencyLogDetail job={job!} />;
@@ -250,6 +252,8 @@ function RightDetailPanel({
         return <EnclaveImageDetail job={job} result={verificationResult} />;
       case "certificate-chain":
         return <CertificateChainDetail job={job} result={verificationResult} />;
+      case "data-transport":
+        return <DataTransportDetail />;
       case "execution-proof":
         return <ExecutionProofDetail job={job} result={verificationResult} />;
       case "output-integrity":

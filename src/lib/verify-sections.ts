@@ -2,6 +2,7 @@ import {
   Shield,
   Cpu,
   Link2,
+  Lock,
   FileCheck,
   Hash,
   TreePine,
@@ -16,6 +17,7 @@ export const sectionStepMap: Record<SidebarSection, string> = {
   hardware: "signature",
   "enclave-image": "pcr-match",
   "certificate-chain": "cert-chain",
+  "data-transport": "cert-chain",
   "execution-proof": "parse",
   "output-integrity": "output-hash",
   "transparency-log": "parse",
@@ -63,6 +65,12 @@ export const sections: SectionItem[] = [
     label: "Certificate Chain",
     icon: Link2,
     description: "AWS root to enclave cert",
+  },
+  {
+    id: "data-transport",
+    label: "Data Transport",
+    icon: Lock,
+    description: "E2E network encryption",
   },
   {
     id: "execution-proof",
