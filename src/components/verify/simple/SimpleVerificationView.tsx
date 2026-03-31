@@ -54,10 +54,6 @@ export function SimpleVerificationView({
           active={activeSection === "certificate-chain"}
           onSectionClick={() => onSectionClick("certificate-chain")}
         />
-        <DataTransportSection
-          active={activeSection === "data-transport"}
-          onSectionClick={() => onSectionClick("data-transport")}
-        />
         <ExecutionSection
           job={job}
           verificationResult={verificationResult}

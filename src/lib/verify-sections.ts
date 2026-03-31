@@ -2,7 +2,6 @@ import {
   Shield,
   Cpu,
   Link2,
-  Lock,
   FileCheck,
   Hash,
   TreePine,
@@ -65,12 +64,6 @@ export const sections: SectionItem[] = [
     label: "Certificate Chain",
     icon: Link2,
     description: "AWS root to enclave cert",
-  },
-  {
-    id: "data-transport",
-    label: "Data Transport",
-    icon: Lock,
-    description: "E2E network encryption",
   },
   {
     id: "execution-proof",
