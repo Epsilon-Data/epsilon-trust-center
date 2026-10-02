@@ -195,7 +195,7 @@ export default function HomePage() {
                       <td className="py-3 px-4">
                         <StatusBadge
                           status={job.pcr0_match === true ? "verified" : job.pcr0_match === false ? "failed" : "unknown"}
-                          label={job.pcr0_match === true ? "Match" : job.pcr0_match === false ? "Mismatch" : "N/A"}
+                          label={job.pcr0_match === true ? "Match" : job.pcr0_match === false ? "Not registered" : "Not assessed"}
                         />
                       </td>
                       <td className="py-3 px-4">

@@ -85,6 +85,7 @@ npm start
 |----------|----------|---------|-------------|
 | `DATABASE_URL` | Yes | — | PostgreSQL connection string |
 | `DATABASE_SSL` | No | auto-detected | Set `true` to enable SSL |
+| `DATABASE_SSL_NO_VERIFY` | No | `false` | Skip TLS certificate verification (dev only). For a private CA set `NODE_EXTRA_CA_CERTS` instead |
 | `DATABASE_POOL_MAX` | No | `5` | Max database connections |
 | `PORT` | No | `3001` | Server port |
 | `CORS_ORIGIN` | No | disabled | Allowed CORS origin (e.g. `http://localhost:5173`) |

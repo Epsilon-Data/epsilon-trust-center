@@ -171,6 +171,21 @@ export function EnclaveImageDetail({ job, result }: { job: JobVerification; resu
 
   const hasAnyPcrs = serverPcrs || registryPcrs || browserPcrs;
 
+  // "PCR verified" only when the attested values matched a published version
+  const pcrBanner =
+    pcrStep?.status === "passed"
+      ? { box: "bg-green-50 border-green-200", text: "text-green-800", label: "PCR verified", note: "Verified client-side in your browser" }
+      : pcrStep?.status === "failed"
+        ? {
+            box: "bg-red-50 border-red-200",
+            text: "text-red-800",
+            label: job.enclave_pcrs?.status === "unregistered" ? "Image not registered" : "PCR mismatch",
+            note: pcrStep.message || "Attested PCR values do not match the published registry",
+          }
+        : pcrStep?.status === "skipped"
+          ? { box: "bg-gray-50 border-gray-200", text: "text-gray-800", label: "PCR not assessed", note: pcrStep.message || "No published PCR values to compare against" }
+          : { box: "bg-yellow-50 border-yellow-200", text: "text-yellow-800", label: "Checking PCRs...", note: "Verified client-side in your browser" };
+
   return (
     <Card>
       <CardHeader>
@@ -187,17 +202,11 @@ export function EnclaveImageDetail({ job, result }: { job: JobVerification; resu
       <CardContent className="space-y-5">
         {/* Verification status banner */}
         <div className="grid grid-cols-1 gap-3">
-          <div className={`rounded-lg border p-3 flex items-center gap-2 ${pcrStep?.status === "passed" ? "bg-green-50 border-green-200" : pcrStep?.status === "failed" ? "bg-red-50 border-red-200" : "bg-yellow-50 border-yellow-200"}`}>
+          <div className={`rounded-lg border p-3 flex items-center gap-2 ${pcrBanner.box}`}>
             <Monitor className="h-4 w-4 shrink-0" />
             <div>
-              <p className={`text-sm font-medium ${pcrStep?.status === "passed" ? "text-green-800" : pcrStep?.status === "failed" ? "text-red-800" : "text-yellow-800"}`}>
-                {pcrStep?.status === "passed"
-                  ? "PCR verified"
-                  : pcrStep?.status === "failed"
-                    ? "PCR mismatch"
-                    : "Checking PCRs..."}
-              </p>
-              <p className="text-xs text-muted-foreground">Verified client-side in your browser</p>
+              <p className={`text-sm font-medium ${pcrBanner.text}`}>{pcrBanner.label}</p>
+              <p className="text-xs text-muted-foreground">{pcrBanner.note}</p>
             </div>
           </div>
         </div>

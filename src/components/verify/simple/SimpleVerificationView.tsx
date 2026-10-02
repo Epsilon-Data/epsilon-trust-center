@@ -32,11 +32,13 @@ export function SimpleVerificationView({
 }: SimpleVerificationViewProps) {
   const allPassed =
     job.server_verification?.valid && verificationResult.valid;
+  const anyFailed =
+    job.server_verification?.valid === false || verificationResult.valid === false;
 
   return (
     <div className="pt-4 pb-6">
       {/* Verified Banner — Phala style */}
-      <VerifiedBanner allPassed={allPassed} />
+      <VerifiedBanner allPassed={allPassed} incomplete={!allPassed && !anyFailed} />
 
       {/* Sections */}
       <div className="px-3 mt-4">
@@ -77,7 +79,13 @@ export function SimpleVerificationView({
 
 /* ─── Verified Banner ──────────────────────────────────────────── */
 
-function VerifiedBanner({ allPassed }: { allPassed: boolean | null | undefined }) {
+function VerifiedBanner({
+  allPassed,
+  incomplete,
+}: {
+  allPassed: boolean | null | undefined;
+  incomplete: boolean;
+}) {
   if (allPassed) {
     return (
       <div className="bg-emerald-50 dark:bg-emerald-950/30 px-5 py-4 mb-4">
@@ -117,6 +125,20 @@ function VerifiedBanner({ allPassed }: { allPassed: boolean | null | undefined }
             TEE Attestation
           </a>
         </div>
+      </div>
+    );
+  }
+
+  if (incomplete) {
+    return (
+      <div className="bg-yellow-50 dark:bg-yellow-950/30 px-5 py-4 mb-4">
+        <div className="flex items-center gap-2 text-yellow-700 dark:text-yellow-400">
+          <ShieldCheck className="h-4 w-4" />
+          <h2 className="font-medium">Verification Incomplete</h2>
+        </div>
+        <p className="mt-2 text-xs text-muted-foreground">
+          Not every check could be assessed. Review the sections below for details.
+        </p>
       </div>
     );
   }

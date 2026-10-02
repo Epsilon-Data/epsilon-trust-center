@@ -4,7 +4,7 @@ import {
   type VerificationResult,
   type VerificationStep,
 } from "@epsilon-data/nitro-verify";
-import type { JobVerification } from "@/lib/api";
+import type { JobVerification, PCRStatus } from "@/lib/api";
 import { checkOutputFiles } from "@/lib/output-files";
 import { checkRunRecord } from "@/lib/run-record";
 
@@ -15,6 +15,26 @@ const INITIAL_RESULT: VerificationResult = {
   attestation: null,
   certChainInfo: null,
 };
+
+// nitro-verify passes the PCR step when it has no expected values to compare.
+// Only a match against a published registry version counts as passed here.
+function pcrStepOverride(status: PCRStatus | undefined): Partial<VerificationStep> | null {
+  if (status === "matched") return null;
+  if (status === "unregistered") {
+    return { status: "failed", message: "Image not registered: PCR0 matches no published enclave version" };
+  }
+  return { status: "skipped", message: "Not assessed: no published PCR values to compare against" };
+}
+
+function applyPcrOverride(
+  stepId: string,
+  update: Partial<VerificationStep>,
+  override: Partial<VerificationStep> | null
+): Partial<VerificationStep> {
+  return override && stepId === "pcr-match" && update.status === "passed"
+    ? { ...update, ...override }
+    : update;
+}
 
 // Cache dev config so we don't fetch it on every verification
 let devConfigCache: { devMode: boolean; rootCertPem?: string } | null = null;
@@ -53,6 +73,7 @@ export function useVerification(job: JobVerification | undefined) {
       return;
     }
 
+    const pcrStatus = job?.enclave_pcrs?.status;
     let cancelled = false;
 
     async function run() {
@@ -68,6 +89,8 @@ export function useVerification(job: JobVerification | undefined) {
         ],
       });
 
+      const override = pcrStepOverride(pcrStatus);
+
       // Check if running in dev mode with a local root CA
       const devConfig = await getDevConfig();
 
@@ -76,7 +99,8 @@ export function useVerification(job: JobVerification | undefined) {
         expectedOutputHash: job?.execution_output_hash ?? undefined,
         allowExpired: true,
         customRootCertPem: devConfig.devMode ? devConfig.rootCertPem : undefined,
-        onStepUpdate,
+        onStepUpdate: (stepId, update) =>
+          onStepUpdate(stepId, applyPcrOverride(stepId, update, override)),
       });
 
       // A released files manifest that differs from the attested one fails the verification
@@ -93,7 +117,15 @@ export function useVerification(job: JobVerification | undefined) {
       }
 
       if (!cancelled) {
-        setResult(verifyResult);
+        const steps = verifyResult.steps.map((s) => ({ ...s, ...applyPcrOverride(s.id, s, override) }));
+        const overridden = verifyResult.valid === true && override !== null;
+        setResult({
+          ...verifyResult,
+          steps,
+          // false = image not registered, null = image not assessed
+          valid: overridden ? (override.status === "failed" ? false : null) : verifyResult.valid,
+          error: overridden && override.status === "failed" ? override.message : verifyResult.error,
+        });
       }
     }
 

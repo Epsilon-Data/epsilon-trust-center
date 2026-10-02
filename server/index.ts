@@ -8,6 +8,7 @@ import crypto from "crypto";
 import { pool } from "./db.js";
 import { loadOutputFiles } from "./output-files.js";
 import { EMPTY_SHA256, ledgerOutcome, loadRunRecord } from "./run-record.js";
+import { assessPCR0, combineVerified, type PCRRegistry } from "./pcr-registry.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -41,21 +42,6 @@ app.use("/api", apiLimiter);
 
 // PCR Registry — fetched from GitHub (epsilon-enclave/published/pcr-registry.json)
 // Falls back to env vars if GitHub fetch fails
-interface PCRVersion {
-  version: string;
-  pcr0: string;
-  pcr1: string;
-  pcr2: string;
-  release_date: string;
-  docker_image: string;
-  source_commit?: string;
-}
-
-interface PCRRegistry {
-  current_version: string;
-  versions: PCRVersion[];
-}
-
 const GITHUB_OWNER = process.env.GITHUB_OWNER || "epsilon-data";
 const GITHUB_REPO = process.env.GITHUB_REPO || "epsilon-enclave";
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN || "";
@@ -76,11 +62,18 @@ async function getPCRRegistry(): Promise<PCRRegistry> {
     };
     if (GITHUB_TOKEN) headers.Authorization = `Bearer ${GITHUB_TOKEN}`;
 
-    const res = await fetch(url, { headers });
+    let res = await fetch(url, { headers });
+    if (res.status === 401 && headers.Authorization) {
+      // A bad token is rejected even for public repos — retry anonymously
+      console.warn("GITHUB_TOKEN rejected by GitHub (401), retrying without it");
+      delete headers.Authorization;
+      res = await fetch(url, { headers });
+    }
     if (!res.ok) throw new Error(`GitHub API ${res.status}: ${res.statusText}`);
     const data = (await res.json()) as PCRRegistry;
+    if (!Array.isArray(data?.versions)) throw new Error("PCR registry has no versions array");
     cachedRegistry = { data, fetchedAt: Date.now() };
-    console.log(`PCR registry fetched: ${data.versions.length} versions, current=${data.current_version}`);
+    console.log(`PCR registry fetched: ${data.versions.length} versions`);
     return data;
   } catch (err) {
     console.warn("Failed to fetch PCR registry from GitHub, using env var fallback:", err);
@@ -104,12 +97,6 @@ async function getPCRRegistry(): Promise<PCRRegistry> {
   }
 }
 
-function getExpectedPCRs(registry: PCRRegistry) {
-  const current = registry.versions.find((v) => v.version === registry.current_version);
-  if (!current || !current.pcr0) return null;
-  return { pcr0: current.pcr0, pcr1: current.pcr1, pcr2: current.pcr2 };
-}
-
 // Extract PCR values from attestation JSON
 function extractPCRsFromAttestation(attestation: unknown): { pcr0?: string; pcr1?: string; pcr2?: string } | null {
   try {
@@ -123,15 +110,6 @@ function extractPCRsFromAttestation(attestation: unknown): { pcr0?: string; pcr1
   } catch {
     return null;
   }
-}
-
-function findMatchingVersion(attestation: unknown, registry: PCRRegistry): string | null {
-  const actual = extractPCRsFromAttestation(attestation);
-  if (!actual?.pcr0) return null;
-  for (const version of registry.versions) {
-    if (version.pcr0 && actual.pcr0 === version.pcr0) return version.version;
-  }
-  return null;
 }
 
 // GET /api/stats - Aggregate stats for homepage. The verified counts cover released jobs with a
@@ -200,16 +178,9 @@ app.get("/api/jobs", async (req, res) => {
           : row.verification_receipt;
       } catch { /* ignore parse errors */ }
 
-      // Use receipt for verification status, fall back to PCR0 column match against registry
-      let serverVerified: boolean | null = null;
-      let pcr0Match: boolean | null = null;
-      if (receipt) {
-        serverVerified = receipt.valid ?? null;
-        pcr0Match = receipt.checks?.pcr_verified ?? null;
-      } else if (row.enclave_pcr0) {
-        // Fallback: match enclave_pcr0 against registry
-        pcr0Match = registry.versions.some((v) => v.pcr0 && v.pcr0 === row.enclave_pcr0);
-      }
+      const { status: pcrStatus } = assessPCR0(row.enclave_pcr0 || receipt?.pcrs?.pcr0, registry);
+      const pcr0Match = pcrStatus === "matched" ? true : pcrStatus === "unregistered" ? false : null;
+      const serverVerified = receipt ? combineVerified(receipt.valid, pcrStatus) : null;
 
       return {
         job_id: row.job_id,
@@ -218,6 +189,7 @@ app.get("/api/jobs", async (req, res) => {
         commit_sha: row.commit_sha || "",
         outcome: ledgerOutcome(row.status, receipt),
         pcr0_match: pcr0Match,
+        pcr_status: pcrStatus,
         server_verified: serverVerified,
       };
     });
@@ -296,39 +268,25 @@ app.get("/api/verify/:jobId", async (req, res) => {
     // Output files of the released job: metadata and manifest hash only, never contents
     const outputFiles = await loadOutputFiles(pool, row.job_id, attestation);
 
-    // Load expected PCRs from registry — match against the version that produced this attestation
+    // Match the attested PCR0 against every published version
     const registry = await getPCRRegistry();
-    // Try matching via enclave_pcr0 column first, fall back to extracting from attestation
-    const pcr0ForMatch = row.enclave_pcr0 || receipt?.pcrs?.pcr0;
-    let matchedVersion: string | null = null;
-    let matchedEntry: PCRVersion | null = null;
-    if (pcr0ForMatch) {
-      for (const v of registry.versions) {
-        if (v.pcr0 && v.pcr0 === pcr0ForMatch) {
-          matchedVersion = v.version;
-          matchedEntry = v;
-          break;
-        }
-      }
-    }
-    if (!matchedVersion) {
-      matchedVersion = findMatchingVersion(attestation, registry);
-      matchedEntry = matchedVersion
-        ? registry.versions.find((v) => v.version === matchedVersion) ?? null
-        : null;
-    }
+    const pcr0ForMatch =
+      row.enclave_pcr0 || receipt?.pcrs?.pcr0 || extractPCRsFromAttestation(attestation)?.pcr0;
+    const { status: pcrStatus, entry: matchedEntry } = assessPCR0(pcr0ForMatch, registry);
+    const matchedVersion = matchedEntry?.version ?? null;
     const expectedPCRs = matchedEntry
       ? { pcr0: matchedEntry.pcr0, pcr1: matchedEntry.pcr1, pcr2: matchedEntry.pcr2 }
-      : getExpectedPCRs(registry);
+      : null;
+    const pcrVerified = pcrStatus === "matched" ? true : pcrStatus === "unregistered" ? false : null;
 
     // Build server_verification from receipt
     const serverVerification = receipt ? {
-      valid: receipt.valid,
+      valid: combineVerified(receipt.valid, pcrStatus),
       checks: {
         syntax_valid: receipt.checks?.syntax_valid ?? false,
         certificate_chain_valid: receipt.checks?.certificate_chain_valid ?? false,
         signature_valid: receipt.checks?.signature_valid ?? false,
-        pcr_verified: receipt.checks?.pcr_verified ?? false,
+        pcr_verified: pcrVerified,
         output_verified: receipt.checks?.output_verified ?? false,
       },
       pcrs: {
@@ -364,6 +322,7 @@ app.get("/api/verify/:jobId", async (req, res) => {
       output_files: outputFiles,
       run_record: runRecord,
       enclave_pcrs: {
+        status: pcrStatus,
         expected: expectedPCRs,
         matched_version: matchedVersion,
         enclave_version: row.enclave_version || matchedVersion || null,

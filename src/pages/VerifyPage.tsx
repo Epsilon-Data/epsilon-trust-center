@@ -321,6 +321,21 @@ function ClientVerificationBanner({
     );
   }
 
+  if (valid === null) {
+    return (
+      <div className="border-b px-4 py-2.5 bg-yellow-50 border-yellow-200 flex items-center gap-3">
+        <ShieldAlert className="h-4 w-4 text-yellow-700" />
+        <span className="text-sm text-yellow-800 font-medium">
+          Attestation is genuine, but the enclave image was not assessed — no published PCR values to compare against
+        </span>
+        <Badge variant="outline" className="ml-auto text-xs gap-1">
+          <Monitor className="h-3 w-3" />
+          Client-side
+        </Badge>
+      </div>
+    );
+  }
+
   return (
     <div className="border-b px-4 py-2.5 bg-red-50 border-red-200 flex items-center gap-3">
       <ShieldAlert className="h-4 w-4 text-red-700" />
