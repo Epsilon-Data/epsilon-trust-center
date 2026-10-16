@@ -132,26 +132,29 @@ function findMatchingVersion(attestation: unknown, registry: PCRRegistry): strin
   return null;
 }
 
-// GET /api/stats - Aggregate stats for homepage
+// GET /api/stats - Aggregate stats for homepage. The verified counts cover released jobs only, so
+// they agree with the ledger; success_rate is attested runs over completed runs whatever their
+// release status (a held or withheld output is still a successful run)
 app.get("/api/stats", async (_req, res) => {
   try {
     const result = await pool.query(`
       SELECT
-        COUNT(*) FILTER (WHERE attestation IS NOT NULL AND status = 'success') AS total_verified,
-        COUNT(*) FILTER (WHERE attestation IS NOT NULL AND status = 'success' AND created_at >= CURRENT_DATE) AS verified_today,
+        COUNT(*) FILTER (WHERE attestation IS NOT NULL AND status = 'success' AND release_status = 'released') AS total_verified,
+        COUNT(*) FILTER (WHERE attestation IS NOT NULL AND status = 'success' AND release_status = 'released' AND created_at >= CURRENT_DATE) AS verified_today,
+        COUNT(*) FILTER (WHERE attestation IS NOT NULL AND status = 'success') AS total_attested,
         COUNT(*) FILTER (WHERE status = 'failed') AS total_failed,
         COUNT(*) FILTER (WHERE status IN ('success', 'failed')) AS total_completed
       FROM job_requests
     `);
     const row = result.rows[0];
     const totalCompleted = parseInt(row.total_completed) || 0;
-    const totalVerified = parseInt(row.total_verified) || 0;
+    const totalAttested = parseInt(row.total_attested) || 0;
     res.json({
-      total_verified: totalVerified,
+      total_verified: parseInt(row.total_verified) || 0,
       verified_today: parseInt(row.verified_today) || 0,
       total_failed: parseInt(row.total_failed) || 0,
       success_rate: totalCompleted > 0
-        ? Math.round((totalVerified / totalCompleted) * 1000) / 10
+        ? Math.round((totalAttested / totalCompleted) * 1000) / 10
         : 0,
     });
   } catch (err) {
@@ -160,7 +163,8 @@ app.get("/api/stats", async (_req, res) => {
   }
 });
 
-// GET /api/jobs - Paginated public ledger
+// GET /api/jobs - Paginated public ledger of released jobs (jobs from before the release gate
+// were backfilled as released)
 app.get("/api/jobs", async (req, res) => {
   try {
     const page = Math.max(1, parseInt(req.query.page as string) || 1);
@@ -172,13 +176,14 @@ app.get("/api/jobs", async (req, res) => {
         `SELECT job_id, status, created_at, completed_at, commit_sha,
                 verification_receipt, enclave_pcr0
          FROM job_requests
-         WHERE status = 'success' AND attestation IS NOT NULL
+         WHERE status = 'success' AND attestation IS NOT NULL AND release_status = 'released'
          ORDER BY created_at DESC NULLS LAST
          LIMIT $1 OFFSET $2`,
         [limit, offset]
       ),
       pool.query(
-        `SELECT COUNT(*) FROM job_requests WHERE status = 'success' AND attestation IS NOT NULL`
+        `SELECT COUNT(*) FROM job_requests
+         WHERE status = 'success' AND attestation IS NOT NULL AND release_status = 'released'`
       ),
     ]);
 
@@ -229,15 +234,16 @@ app.get("/api/jobs", async (req, res) => {
   }
 });
 
-// GET /api/verify/:jobId - Full attestation data for a job
+// GET /api/verify/:jobId - Full attestation data for a released job. Every other job answers like an
+// unknown one (the attestation and receipt of held or withheld output carry its hash)
 app.get("/api/verify/:jobId", async (req, res) => {
   try {
     const result = await pool.query(
       `SELECT job_id, status, created_at, completed_at, commit_sha,
-              attestation, execution_output, output_sha256, release_status, exit_code, enclave_version,
+              attestation, execution_output, output_sha256, exit_code, enclave_version,
               verification_receipt, enclave_pcr0
        FROM job_requests
-       WHERE job_id = $1`,
+       WHERE job_id = $1 AND release_status = 'released'`,
       [req.params.jobId]
     );
 
@@ -270,9 +276,9 @@ app.get("/api/verify/:jobId", async (req, res) => {
       }
     }
 
-    // Only released output is hashed here (job_outputs is never read): gated jobs record the
-    // held output's hash, legacy jobs hash execution_output
-    const executionOutputHash = row.release_status !== "released" ? null : row.output_sha256 ?? (
+    // job_outputs is never read: gated jobs record the released output's hash, legacy jobs hash
+    // execution_output
+    const executionOutputHash = row.output_sha256 ?? (
       row.execution_output
         ? crypto.createHash("sha256").update(row.execution_output).digest("hex")
         : null
