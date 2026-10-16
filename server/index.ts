@@ -234,7 +234,7 @@ app.get("/api/verify/:jobId", async (req, res) => {
   try {
     const result = await pool.query(
       `SELECT job_id, status, created_at, completed_at, commit_sha,
-              attestation, execution_output, exit_code, enclave_version,
+              attestation, execution_output, output_sha256, release_status, exit_code, enclave_version,
               verification_receipt, enclave_pcr0
        FROM job_requests
        WHERE job_id = $1`,
@@ -270,14 +270,13 @@ app.get("/api/verify/:jobId", async (req, res) => {
       }
     }
 
-    // Compute output hash if execution_output exists
-    let executionOutputHash = null;
-    if (row.execution_output) {
-      executionOutputHash = crypto
-        .createHash("sha256")
-        .update(row.execution_output)
-        .digest("hex");
-    }
+    // Only released output is hashed here (job_outputs is never read): gated jobs record the
+    // held output's hash, legacy jobs hash execution_output
+    const executionOutputHash = row.release_status !== "released" ? null : row.output_sha256 ?? (
+      row.execution_output
+        ? crypto.createHash("sha256").update(row.execution_output).digest("hex")
+        : null
+    );
 
     // Load expected PCRs from registry — match against the version that produced this attestation
     const registry = await getPCRRegistry();
