@@ -104,9 +104,9 @@ All endpoints are read-only. No authentication required.
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `GET` | `/api/stats` | Aggregate verification statistics |
-| `GET` | `/api/jobs?page=1&limit=25` | Paginated public job ledger |
-| `GET` | `/api/verify/:jobId` | Full attestation data for a job |
+| `GET` | `/api/stats` | Aggregate verification statistics (verified counts cover released jobs only) |
+| `GET` | `/api/jobs?page=1&limit=25` | Paginated public job ledger (jobs whose output was released) |
+| `GET` | `/api/verify/:jobId` | Full attestation data for a released job (404 until the output is released) |
 | `GET` | `/api/pcr-registry` | Published expected PCR values |
 | `GET` | `/api/dev/config` | DEV_MODE status and root cert (only when DEV_MODE=true) |
 
