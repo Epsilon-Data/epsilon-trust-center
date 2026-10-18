@@ -12,6 +12,7 @@
     "build:all": "npm run build && npm run build:server",
     "start": "node dist/index.js",
     "lint": "eslint .",
+    "test": "tsx --test server/*.test.ts",
     "preview": "vite preview"
   },
   "dependencies": {

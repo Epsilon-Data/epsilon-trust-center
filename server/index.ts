@@ -6,6 +6,7 @@ import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import crypto from "crypto";
 import { pool } from "./db.js";
+import { loadOutputFiles } from "./output-files.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -276,13 +277,16 @@ app.get("/api/verify/:jobId", async (req, res) => {
       }
     }
 
-    // job_outputs is never read: gated jobs record the released output's hash, legacy jobs hash
-    // execution_output
+    // Output text is never read from job_outputs: gated jobs record the released output's hash,
+    // legacy jobs hash execution_output
     const executionOutputHash = row.output_sha256 ?? (
       row.execution_output
         ? crypto.createHash("sha256").update(row.execution_output).digest("hex")
         : null
     );
+
+    // Output files of the released job: metadata and manifest hash only, never contents
+    const outputFiles = await loadOutputFiles(pool, row.job_id, attestation);
 
     // Load expected PCRs from registry — match against the version that produced this attestation
     const registry = await getPCRRegistry();
@@ -349,6 +353,7 @@ app.get("/api/verify/:jobId", async (req, res) => {
       commit_sha: row.commit_sha || "",
       attestation,
       execution_output_hash: executionOutputHash,
+      output_files: outputFiles,
       enclave_pcrs: {
         expected: expectedPCRs,
         matched_version: matchedVersion,

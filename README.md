@@ -106,7 +106,7 @@ All endpoints are read-only. No authentication required.
 |--------|------|-------------|
 | `GET` | `/api/stats` | Aggregate verification statistics (verified counts cover released jobs only) |
 | `GET` | `/api/jobs?page=1&limit=25` | Paginated public job ledger (jobs whose output was released) |
-| `GET` | `/api/verify/:jobId` | Full attestation data for a released job (404 until the output is released) |
+| `GET` | `/api/verify/:jobId` | Full attestation data for a released job (404 until the output is released), including its output files metadata (`output_files`) |
 | `GET` | `/api/pcr-registry` | Published expected PCR values |
 | `GET` | `/api/dev/config` | DEV_MODE status and root cert (only when DEV_MODE=true) |
 
@@ -115,6 +115,7 @@ All endpoints are read-only. No authentication required.
 ```
 ├── server/
 │   ├── index.ts          # Express routes, PCR registry, static serving
+│   ├── output-files.ts   # Released output files metadata + manifest hash check
 │   └── db.ts             # PostgreSQL connection pool
 ├── src/
 │   ├── App.tsx           # Router setup
@@ -161,6 +162,20 @@ The client-side verifier (`@epsilon-data/nitro-verify`) performs these checks in
 3. **Signature** — Verify the ES384 (ECDSA P-384) COSE_Sign1 signature
 4. **PCR Match** — Compare PCR0/1/2 against published expected values
 5. **Output Hash** — Verify SHA-256 of execution output matches attested hash
+
+For released jobs the verify view also lists the output files (name, size, type, SHA-256 — never their
+contents) and checks the files manifest hash: the SHA-256 of the canonical manifest
+(`[{"name","sha256","size","type"}, ...]` sorted by name, compact JSON) rebuilt from the released file
+rows must equal `files_manifest_sha256` in the attestation `user_data`. Jobs from before output files
+show "No output files".
+
+## Testing
+
+```bash
+npm test
+# Include the database tests (scratch Postgres only)
+TEST_DATABASE_URL=postgresql://postgres@localhost:55432/trust_center_test npm test
+```
 
 ## License
 
