@@ -2,7 +2,9 @@ import crypto from "crypto";
 
 // Output files of a released job: metadata only (name, size, type, sha256) — file contents are never
 // read here. files_manifest_sha256 is the SHA-256 of the canonical manifest the enclave attests in
-// user_data; legacy jobs have no manifest (NULL) and no file rows.
+// user_data; legacy jobs have no manifest (NULL) and no file rows. A name is the file's path relative to
+// outputs/ ("/" separated, e.g. plots/fig1.png) and the type is application/octet-stream unless the
+// extension is in the fixed table — both come from the stored rows and are shown as-is.
 
 export interface OutputFileEntry {
   name: string;
@@ -29,7 +31,8 @@ interface Queryable {
 }
 
 // Canonical bytes: Python json.dumps(manifest, sort_keys=True, separators=(",", ":")) with
-// ensure_ascii — keys in sorted order (name, sha256, size, type), entries sorted by name
+// ensure_ascii — keys in sorted order (name, sha256, size, type), entries sorted by name in plain
+// code-point order (Python sorted on str; never localeCompare)
 export function canonicalManifestJson(files: OutputFileEntry[]): string {
   const sorted = [...files].sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
   const json = JSON.stringify(
