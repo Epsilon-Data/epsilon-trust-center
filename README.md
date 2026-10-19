@@ -165,9 +165,14 @@ The client-side verifier (`@epsilon-data/nitro-verify`) performs these checks in
 
 For released jobs the verify view also lists the output files (name, size, type, SHA-256 — never their
 contents) and checks the files manifest hash: the SHA-256 of the canonical manifest
-(`[{"name","sha256","size","type"}, ...]` sorted by name, compact JSON) rebuilt from the released file
-rows must equal `files_manifest_sha256` in the attestation `user_data`. Jobs from before output files
-show "No output files".
+(`[{"name","sha256","size","type"}, ...]` sorted by name in plain code-point order, compact JSON) rebuilt
+from the released file rows must equal `files_manifest_sha256` in the attestation `user_data`. Jobs from
+before output files show "No output files".
+
+A file `name` is its path relative to the job's `outputs/` folder, shown as-is (e.g. `plots/fig1.png`): up
+to 5 `/`-separated segments, each matching `^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$`, at most 255 characters. Any
+file type may be released; `type` comes from the extension (`csv`, `png`, `jpg`/`jpeg`, `json`, `txt`,
+`pdf`) and is `application/octet-stream` for anything else.
 
 ## Testing
 
