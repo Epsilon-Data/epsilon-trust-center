@@ -422,33 +422,6 @@ function OutputIntegritySection({
   );
 }
 
-/* ─── Data Transport ──────────────────────────────────────────── */
-
-function DataTransportSection({
-  active,
-  onSectionClick,
-}: {
-  active: boolean;
-  onSectionClick: () => void;
-}) {
-  return (
-    <VerificationSection
-      title="Data Transport Encrypted"
-      status="verified"
-      onClick={onSectionClick}
-    >
-      <VerificationSubCard
-        title="Source-Side Encryption (epsilon-proxy)"
-        vendorLogo={<Lock className="h-4 w-4 text-muted-foreground" />}
-        description="Data is encrypted on the data owner's machine before entering the network. Only the verified TEE enclave can decrypt — the platform never sees plaintext."
-        learnMoreLinks={[{ label: "epsilon-proxy", href: "https://github.com/Epsilon-Data/epsilon-proxy" }]}
-        selected={active}
-        onSelect={onSectionClick}
-      />
-    </VerificationSection>
-  );
-}
-
 /* ─── Compact PCR Comparison ───────────────────────────────────── */
 
 function CompactPCRComparison({
