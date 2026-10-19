@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { HashDisplay } from "@/components/shared/HashDisplay";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { FieldRow } from "@/components/shared/FieldRow";
+import { OutputFilesInfo } from "@/components/verify/OutputFilesInfo";
 import { Download, ExternalLink, CheckCircle2, XCircle, Globe, Monitor } from "lucide-react";
 import type { JobVerification } from "@/lib/api";
 import type { VerificationResult } from "@epsilon-data/nitro-verify";
@@ -488,6 +489,10 @@ export function OutputIntegrityDetail({ job, result }: { job: JobVerification; r
         ) : (
           <p className="text-muted-foreground text-sm">No output hash available in attestation.</p>
         )}
+        <div className="pt-2 space-y-2">
+          <p className="text-sm font-medium">Output Files</p>
+          <OutputFilesInfo job={job} result={result} />
+        </div>
       </CardContent>
     </Card>
   );

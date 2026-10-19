@@ -5,6 +5,7 @@ import {
   type VerificationStep,
 } from "@epsilon-data/nitro-verify";
 import type { JobVerification } from "@/lib/api";
+import { checkOutputFiles } from "@/lib/output-files";
 
 const INITIAL_RESULT: VerificationResult = {
   status: "idle",
@@ -77,6 +78,12 @@ export function useVerification(job: JobVerification | undefined) {
         onStepUpdate,
       });
 
+      // A released files manifest that differs from the attested one fails the verification
+      if (verifyResult.valid && checkOutputFiles(job?.output_files, verifyResult).status === "mismatch") {
+        verifyResult.valid = false;
+        verifyResult.error = "Output files manifest does not match the attestation";
+      }
+
       if (!cancelled) {
         setResult(verifyResult);
       }
@@ -91,6 +98,7 @@ export function useVerification(job: JobVerification | undefined) {
     job?.attestation?.attestation?.attestation_document,
     job?.enclave_pcrs?.expected,
     job?.execution_output_hash,
+    job?.output_files,
     onStepUpdate,
   ]);
 

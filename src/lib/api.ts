@@ -52,6 +52,7 @@ export interface Proof {
   output_hash: string;
   timestamp: number;
   nonce: string;
+  files_manifest_sha256?: string;
 }
 
 export interface AttestationData {
@@ -75,6 +76,22 @@ export interface ServerVerification {
   timing: Record<string, number>;
 }
 
+export interface OutputFileEntry {
+  name: string;
+  size: number;
+  sha256: string;
+  type: string;
+}
+
+export interface OutputFiles {
+  count: number;
+  files: OutputFileEntry[];
+  files_manifest_sha256: string | null;
+  computed_manifest_sha256: string | null;
+  attested_manifest_sha256: string | null;
+  manifest_verified: boolean | null;
+}
+
 export interface PCRRegistryEntry {
   version: string;
   pcr0: string;
@@ -94,6 +111,7 @@ export interface JobVerification {
   commit_sha: string;
   attestation: AttestationData | null;
   execution_output_hash: string | null;
+  output_files: OutputFiles;
   enclave_pcrs: {
     expected: { pcr0: string; pcr1: string; pcr2: string } | null;
     matched_version?: string | null;

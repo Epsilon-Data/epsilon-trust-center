@@ -1,10 +1,12 @@
-import { Check, ShieldCheck, Lock, XCircle } from "lucide-react";
+import { Check, ShieldCheck, Lock, XCircle, Files } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { HashDisplay } from "@/components/shared/HashDisplay";
 import { VerificationSection } from "./VerificationSection";
 import { VerificationSubCard } from "./VerificationSubCard";
 import { AWSLogo, GitHubLogo } from "./VendorLogo";
+import { OutputFilesInfo } from "@/components/verify/OutputFilesInfo";
 import { getStepStatus } from "@/lib/verify-sections";
+import { checkOutputFiles } from "@/lib/output-files";
 import type { JobVerification } from "@/lib/api";
 import type { VerificationResult } from "@epsilon-data/nitro-verify";
 import type { SidebarSection } from "@/lib/types";
@@ -375,7 +377,11 @@ function OutputIntegritySection({
   return (
     <VerificationSection
       title="Output Integrity Verified"
-      status={getStepStatus("output-integrity", verificationResult)}
+      status={
+        checkOutputFiles(job.output_files, verificationResult).status === "mismatch"
+          ? "failed"
+          : getStepStatus("output-integrity", verificationResult)
+      }
       onClick={onSectionClick}
     >
       <VerificationSubCard
@@ -402,6 +408,15 @@ function OutputIntegritySection({
             </div>
           </div>
         )}
+      </VerificationSubCard>
+      <VerificationSubCard
+        title="Output Files Manifest"
+        vendorLogo={<Files className="h-4 w-4 text-muted-foreground" />}
+        description="The SHA-256 of the manifest of released output files (name, size, type and SHA-256 of each file) is embedded inside the attestation document. If any file was changed after leaving the enclave, the manifest hashes will not match."
+        selected={active}
+        onSelect={onSectionClick}
+      >
+        <OutputFilesInfo job={job} result={verificationResult} />
       </VerificationSubCard>
     </VerificationSection>
   );
