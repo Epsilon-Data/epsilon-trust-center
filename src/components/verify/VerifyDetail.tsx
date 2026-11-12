@@ -5,6 +5,8 @@ import { HashDisplay } from "@/components/shared/HashDisplay";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { FieldRow } from "@/components/shared/FieldRow";
 import { OutputFilesInfo } from "@/components/verify/OutputFilesInfo";
+import { RunRecordInfo } from "@/components/verify/RunRecordInfo";
+import { checkRunRecord } from "@/lib/run-record";
 import { Download, ExternalLink, CheckCircle2, XCircle, Globe, Monitor } from "lucide-react";
 import type { JobVerification } from "@/lib/api";
 import type { VerificationResult } from "@epsilon-data/nitro-verify";
@@ -169,6 +171,21 @@ export function EnclaveImageDetail({ job, result }: { job: JobVerification; resu
 
   const hasAnyPcrs = serverPcrs || registryPcrs || browserPcrs;
 
+  // "PCR verified" only when the attested values matched a published version
+  const pcrBanner =
+    pcrStep?.status === "passed"
+      ? { box: "bg-green-50 border-green-200", text: "text-green-800", label: "PCR verified", note: "Verified client-side in your browser" }
+      : pcrStep?.status === "failed"
+        ? {
+            box: "bg-red-50 border-red-200",
+            text: "text-red-800",
+            label: job.enclave_pcrs?.status === "unregistered" ? "Image not registered" : "PCR mismatch",
+            note: pcrStep.message || "Attested PCR values do not match the published registry",
+          }
+        : pcrStep?.status === "skipped"
+          ? { box: "bg-gray-50 border-gray-200", text: "text-gray-800", label: "PCR not assessed", note: pcrStep.message || "No published PCR values to compare against" }
+          : { box: "bg-yellow-50 border-yellow-200", text: "text-yellow-800", label: "Checking PCRs...", note: "Verified client-side in your browser" };
+
   return (
     <Card>
       <CardHeader>
@@ -185,17 +202,11 @@ export function EnclaveImageDetail({ job, result }: { job: JobVerification; resu
       <CardContent className="space-y-5">
         {/* Verification status banner */}
         <div className="grid grid-cols-1 gap-3">
-          <div className={`rounded-lg border p-3 flex items-center gap-2 ${pcrStep?.status === "passed" ? "bg-green-50 border-green-200" : pcrStep?.status === "failed" ? "bg-red-50 border-red-200" : "bg-yellow-50 border-yellow-200"}`}>
+          <div className={`rounded-lg border p-3 flex items-center gap-2 ${pcrBanner.box}`}>
             <Monitor className="h-4 w-4 shrink-0" />
             <div>
-              <p className={`text-sm font-medium ${pcrStep?.status === "passed" ? "text-green-800" : pcrStep?.status === "failed" ? "text-red-800" : "text-yellow-800"}`}>
-                {pcrStep?.status === "passed"
-                  ? "PCR verified"
-                  : pcrStep?.status === "failed"
-                    ? "PCR mismatch"
-                    : "Checking PCRs..."}
-              </p>
-              <p className="text-xs text-muted-foreground">Verified client-side in your browser</p>
+              <p className={`text-sm font-medium ${pcrBanner.text}`}>{pcrBanner.label}</p>
+              <p className="text-xs text-muted-foreground">{pcrBanner.note}</p>
             </div>
           </div>
         </div>
@@ -401,15 +412,15 @@ export function ExecutionProofDetail({ job, result }: { job: JobVerification; re
         </div>
         <CardDescription>
           These values are embedded in the attestation document's user_data field,
-          binding the attestation to this specific job execution. The nonce prevents
-          replay attacks.
+          binding the attestation to this specific job execution: the run's outcome,
+          the platform job and the execution attempt. The nonce prevents replay attacks.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         {proof ? (
           <>
             <div className="divide-y">
-              <FieldRow label="Job ID" value={proof.job_id} mono />
+              <FieldRow label="Enclave Session" value={proof.job_id} mono />
               <FieldRow
                 label="Timestamp"
                 value={new Date(proof.timestamp * 1000).toLocaleString()}
@@ -422,6 +433,10 @@ export function ExecutionProofDetail({ job, result }: { job: JobVerification; re
             <HashDisplay label="Nonce" hash={proof.nonce} truncate={false} />
             <div className="divide-y">
               <FieldRow label="Commit SHA" value={job.commit_sha} mono />
+            </div>
+            <div className="pt-2 space-y-2">
+              <p className="text-sm font-medium">Run Outcome and Binding</p>
+              <RunRecordInfo job={job} result={result} />
             </div>
             {parsed?.userData && (
               <div className="bg-muted/50 rounded-lg p-3 border">
@@ -445,6 +460,8 @@ export function OutputIntegrityDetail({ job, result }: { job: JobVerification; r
   const computedHash = job.execution_output_hash;
   const match = proofHash && computedHash && proofHash === computedHash;
   const outputStep = result.steps.find((s) => s.id === "output-hash");
+  const run = checkRunRecord(job, result);
+  const noOutput = run.signed && !run.succeeded;
 
   return (
     <Card>
@@ -474,7 +491,9 @@ export function OutputIntegrityDetail({ job, result }: { job: JobVerification; r
               </div>
               <p className={`text-sm mt-2 ${match ? "text-green-800" : computedHash ? "text-red-800" : "text-yellow-800"}`}>
                 {match
-                  ? "The output you received matches exactly what the enclave produced."
+                  ? noOutput
+                    ? "This run did not succeed: the enclave attests an empty output, and no output was released."
+                    : "The output you received matches exactly what the enclave produced."
                   : computedHash
                     ? "WARNING: The output may have been tampered with after execution."
                     : "The stored output is not available for comparison."}

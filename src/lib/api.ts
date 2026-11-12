@@ -1,3 +1,5 @@
+import type { RunRecord } from "@/lib/run-record";
+
 const API_BASE = "/api";
 
 async function fetchJSON<T>(url: string): Promise<T> {
@@ -9,12 +11,16 @@ async function fetchJSON<T>(url: string): Promise<T> {
   return res.json();
 }
 
+export type PCRStatus = "matched" | "unregistered" | "not_assessed";
+
 export interface JobListItem {
   job_id: string;
   has_attestation: boolean;
   completed_at: string;
   commit_sha: string;
+  outcome: string;
   pcr0_match: boolean | null;
+  pcr_status?: PCRStatus;
   server_verified: boolean | null;
 }
 
@@ -62,12 +68,12 @@ export interface AttestationData {
 }
 
 export interface ServerVerification {
-  valid: boolean;
+  valid: boolean | null;
   checks: {
     syntax_valid: boolean;
     certificate_chain_valid: boolean;
     signature_valid: boolean;
-    pcr_verified: boolean;
+    pcr_verified: boolean | null;
     output_verified: boolean;
   };
   pcrs: { pcr0: string; pcr1: string; pcr2: string };
@@ -112,7 +118,9 @@ export interface JobVerification {
   attestation: AttestationData | null;
   execution_output_hash: string | null;
   output_files: OutputFiles;
+  run_record?: RunRecord | null;
   enclave_pcrs: {
+    status?: PCRStatus;
     expected: { pcr0: string; pcr1: string; pcr2: string } | null;
     matched_version?: string | null;
     enclave_version?: string | null;
@@ -122,7 +130,7 @@ export interface JobVerification {
 }
 
 export interface PCRRegistry {
-  current_version: string;
+  current_version?: string;
   versions: PCRRegistryEntry[];
 }
 

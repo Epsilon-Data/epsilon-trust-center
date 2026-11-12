@@ -21,6 +21,7 @@ import { SimpleVerificationView } from "@/components/verify/simple/SimpleVerific
 import { sections, sectionStepMap, getStepStatus } from "@/lib/verify-sections";
 import { fetchJobVerification } from "@/lib/api";
 import { useVerification } from "@/hooks/useVerification";
+import { checkRunRecord, outcomeLabel } from "@/lib/run-record";
 import type { JobVerification } from "@/lib/api";
 import type { SidebarSection } from "@/lib/types";
 
@@ -101,6 +102,7 @@ export default function VerifyPage({ params }: VerifyPageProps) {
   }
 
   const hasAttestation = !!job.attestation;
+  const run = checkRunRecord(job, verificationResult);
 
   function renderDetailContent(sectionId: SidebarSection) {
     switch (sectionId) {
@@ -138,7 +140,13 @@ export default function VerifyPage({ params }: VerifyPageProps) {
           ) : (
             <Badge variant="outline" className="text-sm px-3 py-1">NO ATTESTATION</Badge>
           )}
-          <Badge variant="secondary">{job.status}</Badge>
+          {run.signed ? (
+            <Badge variant={run.succeeded ? "secondary" : "destructive"}>
+              Run: {outcomeLabel(run.outcome, run.exitCode)}
+            </Badge>
+          ) : (
+            <Badge variant="secondary">{job.status}</Badge>
+          )}
         </div>
       </div>
 
@@ -306,6 +314,21 @@ function ClientVerificationBanner({
           All checks passed — verified client-side on your device
         </span>
         <Badge variant="outline" className="ml-auto text-xs gap-1 border-green-300 text-green-700">
+          <Monitor className="h-3 w-3" />
+          Client-side
+        </Badge>
+      </div>
+    );
+  }
+
+  if (valid === null) {
+    return (
+      <div className="border-b px-4 py-2.5 bg-yellow-50 border-yellow-200 flex items-center gap-3">
+        <ShieldAlert className="h-4 w-4 text-yellow-700" />
+        <span className="text-sm text-yellow-800 font-medium">
+          Attestation is genuine, but the enclave image was not assessed — no published PCR values to compare against
+        </span>
+        <Badge variant="outline" className="ml-auto text-xs gap-1">
           <Monitor className="h-3 w-3" />
           Client-side
         </Badge>
