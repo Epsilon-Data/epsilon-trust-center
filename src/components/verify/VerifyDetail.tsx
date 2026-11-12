@@ -5,6 +5,8 @@ import { HashDisplay } from "@/components/shared/HashDisplay";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { FieldRow } from "@/components/shared/FieldRow";
 import { OutputFilesInfo } from "@/components/verify/OutputFilesInfo";
+import { RunRecordInfo } from "@/components/verify/RunRecordInfo";
+import { checkRunRecord } from "@/lib/run-record";
 import { Download, ExternalLink, CheckCircle2, XCircle, Globe, Monitor } from "lucide-react";
 import type { JobVerification } from "@/lib/api";
 import type { VerificationResult } from "@epsilon-data/nitro-verify";
@@ -401,15 +403,15 @@ export function ExecutionProofDetail({ job, result }: { job: JobVerification; re
         </div>
         <CardDescription>
           These values are embedded in the attestation document's user_data field,
-          binding the attestation to this specific job execution. The nonce prevents
-          replay attacks.
+          binding the attestation to this specific job execution: the run's outcome,
+          the platform job and the execution attempt. The nonce prevents replay attacks.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         {proof ? (
           <>
             <div className="divide-y">
-              <FieldRow label="Job ID" value={proof.job_id} mono />
+              <FieldRow label="Enclave Session" value={proof.job_id} mono />
               <FieldRow
                 label="Timestamp"
                 value={new Date(proof.timestamp * 1000).toLocaleString()}
@@ -422,6 +424,10 @@ export function ExecutionProofDetail({ job, result }: { job: JobVerification; re
             <HashDisplay label="Nonce" hash={proof.nonce} truncate={false} />
             <div className="divide-y">
               <FieldRow label="Commit SHA" value={job.commit_sha} mono />
+            </div>
+            <div className="pt-2 space-y-2">
+              <p className="text-sm font-medium">Run Outcome and Binding</p>
+              <RunRecordInfo job={job} result={result} />
             </div>
             {parsed?.userData && (
               <div className="bg-muted/50 rounded-lg p-3 border">
@@ -445,6 +451,8 @@ export function OutputIntegrityDetail({ job, result }: { job: JobVerification; r
   const computedHash = job.execution_output_hash;
   const match = proofHash && computedHash && proofHash === computedHash;
   const outputStep = result.steps.find((s) => s.id === "output-hash");
+  const run = checkRunRecord(job, result);
+  const noOutput = run.signed && !run.succeeded;
 
   return (
     <Card>
@@ -474,7 +482,9 @@ export function OutputIntegrityDetail({ job, result }: { job: JobVerification; r
               </div>
               <p className={`text-sm mt-2 ${match ? "text-green-800" : computedHash ? "text-red-800" : "text-yellow-800"}`}>
                 {match
-                  ? "The output you received matches exactly what the enclave produced."
+                  ? noOutput
+                    ? "This run did not succeed: the enclave attests an empty output, and no output was released."
+                    : "The output you received matches exactly what the enclave produced."
                   : computedHash
                     ? "WARNING: The output may have been tampered with after execution."
                     : "The stored output is not available for comparison."}

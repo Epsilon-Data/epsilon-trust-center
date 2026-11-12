@@ -5,8 +5,10 @@ import { VerificationSection } from "./VerificationSection";
 import { VerificationSubCard } from "./VerificationSubCard";
 import { AWSLogo, GitHubLogo } from "./VendorLogo";
 import { OutputFilesInfo } from "@/components/verify/OutputFilesInfo";
+import { RunRecordInfo } from "@/components/verify/RunRecordInfo";
 import { getStepStatus } from "@/lib/verify-sections";
 import { checkOutputFiles } from "@/lib/output-files";
+import { checkRunRecord } from "@/lib/run-record";
 import type { JobVerification } from "@/lib/api";
 import type { VerificationResult } from "@epsilon-data/nitro-verify";
 import type { SidebarSection } from "@/lib/types";
@@ -330,7 +332,7 @@ function ExecutionSection({
   const proof = job.attestation?.proof;
 
   const details = [
-    proof?.job_id && { label: "Job ID", value: proof.job_id, mono: true },
+    proof?.job_id && { label: "Enclave Session", value: proof.job_id, mono: true },
     proof?.timestamp && {
       label: "Timestamp",
       value: new Date(proof.timestamp * 1000).toLocaleString(),
@@ -342,17 +344,30 @@ function ExecutionSection({
   return (
     <VerificationSection
       title="Execution Verified"
-      status={getStepStatus("execution-proof", verificationResult)}
+      status={
+        checkRunRecord(job, verificationResult).failure
+          ? "failed"
+          : getStepStatus("execution-proof", verificationResult)
+      }
       onClick={onSectionClick}
     >
       <VerificationSubCard
         title="Job Execution Proof"
         vendorLogo={<ShieldCheck className="h-4 w-4 text-muted-foreground" />}
-        description="Cryptographic proof that this specific job ran inside the attested enclave. The job ID, timestamp, and nonce are embedded in the attestation, binding it to this exact execution."
+        description="Cryptographic proof that this specific job ran inside the attested enclave. The session, timestamp, and nonce are embedded in the attestation, binding it to this exact execution."
         details={details}
         selected={active}
         onSelect={onSectionClick}
       />
+      <VerificationSubCard
+        title="Run Outcome and Binding"
+        vendorLogo={<ShieldCheck className="h-4 w-4 text-muted-foreground" />}
+        description="The enclave signs what happened to the script, and the platform job and execution attempt the record belongs to. A record of another job or attempt, or of a different error text, fails verification."
+        selected={active}
+        onSelect={onSectionClick}
+      >
+        <RunRecordInfo job={job} result={verificationResult} />
+      </VerificationSubCard>
     </VerificationSection>
   );
 }

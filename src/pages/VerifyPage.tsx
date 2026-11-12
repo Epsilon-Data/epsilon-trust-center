@@ -21,6 +21,7 @@ import { SimpleVerificationView } from "@/components/verify/simple/SimpleVerific
 import { sections, sectionStepMap, getStepStatus } from "@/lib/verify-sections";
 import { fetchJobVerification } from "@/lib/api";
 import { useVerification } from "@/hooks/useVerification";
+import { checkRunRecord, outcomeLabel } from "@/lib/run-record";
 import type { JobVerification } from "@/lib/api";
 import type { SidebarSection } from "@/lib/types";
 
@@ -101,6 +102,7 @@ export default function VerifyPage({ params }: VerifyPageProps) {
   }
 
   const hasAttestation = !!job.attestation;
+  const run = checkRunRecord(job, verificationResult);
 
   function renderDetailContent(sectionId: SidebarSection) {
     switch (sectionId) {
@@ -138,7 +140,13 @@ export default function VerifyPage({ params }: VerifyPageProps) {
           ) : (
             <Badge variant="outline" className="text-sm px-3 py-1">NO ATTESTATION</Badge>
           )}
-          <Badge variant="secondary">{job.status}</Badge>
+          {run.signed ? (
+            <Badge variant={run.succeeded ? "secondary" : "destructive"}>
+              Run: {outcomeLabel(run.outcome, run.exitCode)}
+            </Badge>
+          ) : (
+            <Badge variant="secondary">{job.status}</Badge>
+          )}
         </div>
       </div>
 

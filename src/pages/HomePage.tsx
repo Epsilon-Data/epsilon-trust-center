@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { fetchJobs, fetchStats } from "@/lib/api";
 import { truncateHash, formatTimeAgo } from "@/lib/utils";
+import { outcomeLabel } from "@/lib/run-record";
 import type { PaginatedJobs, Stats } from "@/lib/api";
 
 export default function HomePage() {
@@ -150,6 +151,7 @@ export default function HomePage() {
                 <tr className="border-b">
                   <th className="text-left py-3 px-4 font-medium text-muted-foreground">Job ID</th>
                   <th className="text-left py-3 px-4 font-medium text-muted-foreground">Verified</th>
+                  <th className="text-left py-3 px-4 font-medium text-muted-foreground">Run</th>
                   <th className="text-left py-3 px-4 font-medium text-muted-foreground">PCR Match</th>
                   <th className="text-left py-3 px-4 font-medium text-muted-foreground">Commit</th>
                   <th className="text-left py-3 px-4 font-medium text-muted-foreground">Time</th>
@@ -158,13 +160,13 @@ export default function HomePage() {
               <tbody>
                 {isLoading ? (
                   <tr>
-                    <td colSpan={5} className="text-center py-8 text-muted-foreground">
+                    <td colSpan={6} className="text-center py-8 text-muted-foreground">
                       Loading...
                     </td>
                   </tr>
                 ) : !jobsData?.jobs?.length ? (
                   <tr>
-                    <td colSpan={5} className="text-center py-8 text-muted-foreground">
+                    <td colSpan={6} className="text-center py-8 text-muted-foreground">
                       No verified executions yet
                     </td>
                   </tr>
@@ -184,6 +186,11 @@ export default function HomePage() {
                           status={job.server_verified === true ? "verified" : job.server_verified === false ? "failed" : job.has_attestation ? "checking" : "unknown"}
                           label={job.server_verified === true ? "Verified" : job.server_verified === false ? "Failed" : job.has_attestation ? "Attested" : "None"}
                         />
+                      </td>
+                      <td className="py-3 px-4 text-xs">
+                        <span className={job.outcome === "succeeded" ? "text-muted-foreground" : "text-red-700 font-medium"}>
+                          {outcomeLabel(job.outcome)}
+                        </span>
                       </td>
                       <td className="py-3 px-4">
                         <StatusBadge

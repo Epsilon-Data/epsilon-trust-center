@@ -1,3 +1,5 @@
+import type { RunRecord } from "@/lib/run-record";
+
 const API_BASE = "/api";
 
 async function fetchJSON<T>(url: string): Promise<T> {
@@ -14,6 +16,7 @@ export interface JobListItem {
   has_attestation: boolean;
   completed_at: string;
   commit_sha: string;
+  outcome: string;
   pcr0_match: boolean | null;
   server_verified: boolean | null;
 }
@@ -112,6 +115,7 @@ export interface JobVerification {
   attestation: AttestationData | null;
   execution_output_hash: string | null;
   output_files: OutputFiles;
+  run_record?: RunRecord | null;
   enclave_pcrs: {
     expected: { pcr0: string; pcr1: string; pcr2: string } | null;
     matched_version?: string | null;

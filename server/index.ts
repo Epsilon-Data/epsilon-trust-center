@@ -7,6 +7,7 @@ import rateLimit from "express-rate-limit";
 import crypto from "crypto";
 import { pool } from "./db.js";
 import { loadOutputFiles } from "./output-files.js";
+import { EMPTY_SHA256, ledgerOutcome, loadRunRecord } from "./run-record.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -133,15 +134,15 @@ function findMatchingVersion(attestation: unknown, registry: PCRRegistry): strin
   return null;
 }
 
-// GET /api/stats - Aggregate stats for homepage. The verified counts cover released jobs only, so
-// they agree with the ledger; success_rate is attested runs over completed runs whatever their
+// GET /api/stats - Aggregate stats for homepage. The verified counts cover released jobs with a
+// signed record, whatever the run's outcome, so they agree with the ledger; success_rate is attested runs over completed runs whatever their
 // release status (a held or withheld output is still a successful run)
 app.get("/api/stats", async (_req, res) => {
   try {
     const result = await pool.query(`
       SELECT
-        COUNT(*) FILTER (WHERE attestation IS NOT NULL AND status = 'success' AND release_status = 'released') AS total_verified,
-        COUNT(*) FILTER (WHERE attestation IS NOT NULL AND status = 'success' AND release_status = 'released' AND created_at >= CURRENT_DATE) AS verified_today,
+        COUNT(*) FILTER (WHERE attestation IS NOT NULL AND status IN ('success', 'failed') AND release_status = 'released') AS total_verified,
+        COUNT(*) FILTER (WHERE attestation IS NOT NULL AND status IN ('success', 'failed') AND release_status = 'released' AND created_at >= CURRENT_DATE) AS verified_today,
         COUNT(*) FILTER (WHERE attestation IS NOT NULL AND status = 'success') AS total_attested,
         COUNT(*) FILTER (WHERE status = 'failed') AS total_failed,
         COUNT(*) FILTER (WHERE status IN ('success', 'failed')) AS total_completed
@@ -165,7 +166,7 @@ app.get("/api/stats", async (_req, res) => {
 });
 
 // GET /api/jobs - Paginated public ledger of released jobs (jobs from before the release gate
-// were backfilled as released)
+// were backfilled as released). A run that did not succeed is listed too when it has a signed record
 app.get("/api/jobs", async (req, res) => {
   try {
     const page = Math.max(1, parseInt(req.query.page as string) || 1);
@@ -177,14 +178,14 @@ app.get("/api/jobs", async (req, res) => {
         `SELECT job_id, status, created_at, completed_at, commit_sha,
                 verification_receipt, enclave_pcr0
          FROM job_requests
-         WHERE status = 'success' AND attestation IS NOT NULL AND release_status = 'released'
+         WHERE status IN ('success', 'failed') AND attestation IS NOT NULL AND release_status = 'released'
          ORDER BY created_at DESC NULLS LAST
          LIMIT $1 OFFSET $2`,
         [limit, offset]
       ),
       pool.query(
         `SELECT COUNT(*) FROM job_requests
-         WHERE status = 'success' AND attestation IS NOT NULL AND release_status = 'released'`
+         WHERE status IN ('success', 'failed') AND attestation IS NOT NULL AND release_status = 'released'`
       ),
     ]);
 
@@ -215,6 +216,7 @@ app.get("/api/jobs", async (req, res) => {
         has_attestation: true,
         completed_at: row.completed_at || row.created_at,
         commit_sha: row.commit_sha || "",
+        outcome: ledgerOutcome(row.status, receipt),
         pcr0_match: pcr0Match,
         server_verified: serverVerified,
       };
@@ -241,7 +243,7 @@ app.get("/api/verify/:jobId", async (req, res) => {
   try {
     const result = await pool.query(
       `SELECT job_id, status, created_at, completed_at, commit_sha,
-              attestation, execution_output, output_sha256, exit_code, enclave_version,
+              attestation, execution_output, output_sha256, enclave_version,
               verification_receipt, enclave_pcr0
        FROM job_requests
        WHERE job_id = $1 AND release_status = 'released'`,
@@ -277,12 +279,18 @@ app.get("/api/verify/:jobId", async (req, res) => {
       }
     }
 
+    // Signed outcome and job/attempt binding of the run, with the hash of a released error text
+    const runRecord = await loadRunRecord(pool, row.job_id, attestation, receipt);
+
     // Output text is never read from job_outputs: gated jobs record the released output's hash,
-    // legacy jobs hash execution_output
+    // legacy jobs hash execution_output. A run that released an error text has no output: the
+    // enclave attests the hash of the empty string for it
     const executionOutputHash = row.output_sha256 ?? (
-      row.execution_output
-        ? crypto.createHash("sha256").update(row.execution_output).digest("hex")
-        : null
+      runRecord.released_error_sha256 !== null
+        ? EMPTY_SHA256
+        : row.execution_output
+          ? crypto.createHash("sha256").update(row.execution_output).digest("hex")
+          : null
     );
 
     // Output files of the released job: metadata and manifest hash only, never contents
@@ -354,6 +362,7 @@ app.get("/api/verify/:jobId", async (req, res) => {
       attestation,
       execution_output_hash: executionOutputHash,
       output_files: outputFiles,
+      run_record: runRecord,
       enclave_pcrs: {
         expected: expectedPCRs,
         matched_version: matchedVersion,
